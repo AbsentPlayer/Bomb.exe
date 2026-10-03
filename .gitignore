@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+venv/
+.venv/
+.env
+
+# Game-generated / local files
+highscores.json
+bomb_debug.log
+bomb.mp3
+bomb.ico
+bomb.exe
+bomb_debug.log
+
+# Builds
+_build*
+build/
+dist/
+*.spec
+*.o
+
+# OS
+.DS_Store
+Thumbs.db
