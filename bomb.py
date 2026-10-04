@@ -2162,15 +2162,15 @@ def _joy_dir():
             dup = _joy_button(JOY_DPAD[0])
             ddn = _joy_button(JOY_DPAD[1])
             if dup and not ddn:
-                fy = -1
-            elif ddn and not dup:
                 fy = 1
+            elif ddn and not dup:
+                fy = -1
         try:
             hx, hy = JOY.get_hat(0)
             if fx == 0 and hx != 0:
                 fx = int(hx)
             if fy == 0 and hy != 0:
-                fy = -int(hy)
+                fy = int(hy)
         except Exception:
             pass
         return (fx, fy)
