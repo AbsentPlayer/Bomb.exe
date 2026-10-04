@@ -300,11 +300,11 @@ def test_menu_joy_hat_navigates_and_changes_volume():
     s.set_volume(120)
     ui = bomb.SettingsUI(s)
     ui.open = True
-    assert ui.handle_joy_event(hat_event((0, 1))) is True
+    assert ui.handle_joy_event(hat_event((0, -1))) is True
     assert ui.ROWS[ui.index] == 'fullscreen'
     assert ui.handle_joy_event(hat_event((0, 0))) is False
-    assert ui.handle_joy_event(hat_event((0, -1))) is True
-    assert ui.ROWS[ui.index] == 'volume'
+    assert ui.handle_joy_event(hat_event((0, 1))) is True
+    assert ui.ROWS[ui.index] == 'reset_scores'
     assert ui.handle_joy_event(hat_event((0, 0))) is False
     assert ui.handle_joy_event(hat_event((1, 0))) is True
     assert s.volume == 120 + bomb.VOL_STEP

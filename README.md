@@ -183,3 +183,22 @@ requirements.txt   â€“ dependencies
 ## License
 
 [MIT](LICENSE) â€“ see `LICENSE` file.
+
+
+## Mega-Kill und bomb score display
+
+- **Mega-Kill**: Bei 10 aufeinanderfolgenden Double-/Multi-Kills erscheint ein Mega-Kill.
+  - **Sound**: Es erklingt ein spezieller Mega-Kill-Sound aus der Datei G:\bomb\Mega Kill - Sound Effect.mp3 (falls vorhanden), sonst fällt auf megakill.mp3 zurück.
+  - **Stern-Effekt**: Ein fünfziger Stern mit wechselnden Farben (#FFFF00, #FF0000, #00FF00, #00FFFF) erscheint am Explosionsort und wächst kontinuierlich, bis er den Bildschirm verlässt.
+  - **Spieler-Immunität**: Nach einem Mega-Kill ist der Spieler 15 Sekunden lang unverwundbar.
+  - **Flicker-Effekt**: Während der Immunitätszeit flackert der Spieler in den Farben #FFFF00, #FF0000, #00FF00 und #00FFFF abwechselnd.
+
+- **Bomben-Punkte-Anzeige am Spieler**: Nach dem Platzieren einer Bombe und deren Explosion (wenn keine Bomben mehr übrig sind) erscheint am Spielerposition ein Punkte-Text.
+  - Der Text zeigt den erhaltenen Punktebetrag an.
+  - Er erscheint in gelber Schrift (255, 255, 0) mit 50% Transparenz (Alpha 200).
+  - Er beginnt mit einer Größe von 10 Pixel und wächst auf 30 Pixel, bevor er sich innerhalb von 4 Sekunden vollständig ausblendet.
+
+- **DPad-Steuerung im Menü**: Die DPad-Steuerung im Settings-Menü ist wie folgt definiert:
+  - **DOWN** wählt das nächste Menüelement (vollscreen nach unten).
+  - **UP** wählt das vorherige Menüelement (highscores nach oben).
+  - Dies wurde extra so implementiert, um die gewünschte Laufrichtung zu gewährleisten.

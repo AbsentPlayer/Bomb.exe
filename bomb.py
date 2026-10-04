@@ -979,6 +979,7 @@ class Game:
         self.multi_kill_streak = 0
         self.double_kill_streak = 0
         self.level = 1
+        self.score_floating_texts = []
         self.state = STATE_START
         self.state_t = 0.0
         self.hiscores = load_highscores()
@@ -1201,6 +1202,20 @@ class Game:
             # addiert wird jede Bombe mit 2+ Kills, in beliebiger Reihenfolge.
             self.double_kill_streak += 1
             self.player.bombs_left = min(MAX_BOMBS, self.player.bombs_left + 1)
+            # Bomben-Punkteanzeige am Spielerposition
+            if self.player.bombs_left == 0 and not self.player.no_damage_time > 0:
+                score_text = str(self.score - self.prev_score) if hasattr(self, 'prev_score') else str(self.score)
+                self.score_floating_texts.append({
+                    'text': score_text,
+                    'x': self.player.sx,
+                    'y': self.player.sy,
+                    'age': 0.0,
+                    'max_age': 4.0,
+                    'start_size': 10,
+                    'end_size': 30,
+                    'color': (255, 255, 0),
+                    'alpha': 200
+                })
             sx = MARGIN_L + cx * TILE + TILE // 2
             sy = MARGIN_T + cy * TILE + TILE // 2
             self.stars.append(StarEffect(sx, sy, 'Double-Kill'))
