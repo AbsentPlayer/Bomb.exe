@@ -6,15 +6,17 @@ def make_icon(size=512):
     d = ImageDraw.Draw(img)
     s = size
 
-    # bomb body (dark sphere)
+    # bomb body (round sphere)
     cx, cy, r = s * 0.5, s * 0.55, s * 0.30
-    # main sphere (dark)
-    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(30, 30, 40, 255))
+    # outline so the bomb reads at small sizes
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=(115, 120, 145, 255), width=14)
+    # main sphere
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(52, 58, 76, 255))
     # darker bottom shading
-    d.ellipse([cx - r, cy, cx + r, cy + r], fill=(18, 18, 26, 255))
+    d.ellipse([cx - r, cy, cx + r, cy + r], fill=(30, 34, 48, 255))
     # top-left light shading
     d.ellipse([cx - r + int(r * 0.35), cy - r, cx + int(r * 0.45), cy - int(r * 0.2)],
-              fill=(70, 72, 92, 255))
+              fill=(110, 118, 142, 255))
     # specular highlight (bright)
     d.ellipse([cx - int(r * 0.42), cy - int(r * 0.62), cx - int(r * 0.25), cy - int(r * 0.28)],
               fill=(200, 205, 225, 255))
@@ -28,7 +30,7 @@ def make_icon(size=512):
     fx0, fy0 = cx + int(r * 0.42), cy - int(r * 0.75)
     fx1, fy1 = cx + int(r * 0.72), cy - int(r * 1.02)
     fx2, fy2 = cx + int(r * 0.98), cy - int(r * 1.18)
-    fw = int(s * 0.045)
+    fw = int(s * 0.055)
     d.line([fx0, fy0, fx1, fy1], fill=(70, 60, 50, 255), width=fw)
     d.line([fx1, fy1, fx2, fy2], fill=(70, 60, 50, 255), width=fw)
     d.ellipse([fx0 - fw, fy0 - fw, fx0 + fw, fy0 + fw], fill=(70, 60, 50, 255))
@@ -62,7 +64,10 @@ def make_icon(size=512):
                    x + s * 0.012 * scale, y + s * 0.04 * scale],
                   fill=(255, 245, 140, 255))
 
-    flame(fx2, fy2, 1.0)
+    # glow behind the flame
+    d.ellipse([fx2 - int(s * 0.10), fy2 - int(s * 0.10), fx2 + int(s * 0.10), fy2 + int(s * 0.10)],
+              fill=(255, 110, 40, 110))
+    flame(fx2, fy2, 1.15)
     # small secondary flicker
     flame(fx2 - s * 0.04, fy2 - s * 0.03, 0.45)
 

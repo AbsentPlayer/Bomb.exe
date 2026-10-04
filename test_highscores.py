@@ -14,6 +14,11 @@ def key(ch):
     return pygame.event.Event(pygame.KEYDOWN, key=pygame.K_a, unicode=ch)
 
 
+def key_k(k, ch=''):
+    """Tastatur-Event mit korrekt gesetztem key - wie es pygame im Spiel liefert."""
+    return pygame.event.Event(pygame.KEYDOWN, key=k, unicode=ch)
+
+
 def enter():
     return pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode='\r')
 
@@ -22,27 +27,36 @@ def bs():
     return pygame.event.Event(pygame.KEYDOWN, key=pygame.K_BACKSPACE)
 
 
-def frames(game, n, events=()):
+def frames(game, n, events=(), ui=None):
+    """Spiegelt die Event-Reihenfolge aus main(): erst das Highscore-Popup,
+    danach (nur wenn es zu ist) die Einstellungen."""
     for ev in events:
         pygame.event.post(ev)
     for _ in range(n):
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
                 return
+            if game.hs_popup:
+                if ev.type == pygame.KEYDOWN:
+                    if ev.key == pygame.K_BACKSPACE:
+                        game.hs_name = game.hs_name[:-1]
+                    elif ev.key == pygame.K_RETURN:
+                        game.hs_rank = bomb.add_highscore(game.hiscores, game.hs_name, game.score)
+                        game.hs_popup = False
+                        bomb.save_highscores(game.hiscores)
+                    else:
+                        c = ev.unicode
+                        if len(c) == 1 and (c.isalnum() or c == ' '):
+                            if len(game.hs_name) < bomb.HS_NAME_MAX:
+                                game.hs_name += c
+                continue
+            if ui is not None and ev.type in (pygame.KEYDOWN, pygame.JOYBUTTONDOWN, pygame.JOYHATMOTION):
+                if ui.handle_joy_event(ev):
+                    continue
+                if ui.handle_event(ev):
+                    continue
             if ev.type == pygame.KEYDOWN and ev.key == pygame.K_p and game.state == bomb.STATE_PLAY:
                 game.toggle_pause()
-            if ev.type == pygame.KEYDOWN and game.hs_popup:
-                if ev.key == pygame.K_BACKSPACE:
-                    game.hs_name = game.hs_name[:-1]
-                elif ev.key == pygame.K_RETURN:
-                    game.hs_rank = bomb.add_highscore(game.hiscores, game.hs_name, game.score)
-                    game.hs_popup = False
-                    bomb.save_highscores(game.hiscores)
-                else:
-                    c = ev.unicode
-                    if len(c) == 1 and (c.isalnum() or c == ' '):
-                        if len(game.hs_name) < bomb.HS_NAME_MAX:
-                            game.hs_name += c
         game.update(0.02)
 
 
@@ -89,17 +103,51 @@ def test_backspace_and_cap():
     game = setup(500, [])
     assert game.hs_popup
     frames(game, 30, [key('a'), key('b'), key('c'), key('d'), key('z'), key('z'), key('z'), key('z'), key('z'), key('z'), key('z')])
-    assert game.hs_name == 'abcdzzzz'
+    assert game.hs_name == 'abcdzzzzzz'
     frames(game, 5, [bs()])
-    assert game.hs_name == 'abcdzzz'
+    assert game.hs_name == 'abcdzzzzz'
     frames(game, 5, [key('q')])
-    assert game.hs_name == 'abcdzzzq'
+    assert game.hs_name == 'abcdzzzzzq'
     frames(game, 5, [bs()])
-    assert game.hs_name == 'abcdzzz'
+    assert game.hs_name == 'abcdzzzzz'
     frames(game, 5, [key(' '), key('#')])
-    assert game.hs_name == 'abcdzzz '
+    assert game.hs_name == 'abcdzzzzz '
     frames(game, 5, [enter()])
-    assert game.hiscores == [['ABCDZZZ', 500]]
+    assert game.hiscores == [['ABCDZZZZZ', 500]]
+
+
+def test_name_limit_is_10():
+    assert bomb.HS_NAME_MAX == 10
+    game = setup(500, [])
+    frames(game, 40, [key(c) for c in 'abcdefghijklmno'])
+    assert game.hs_name == 'abcdefghij'
+    assert len(game.hs_name) == 10
+    frames(game, 5, [enter()])
+    assert game.hiscores == [['ABCDEFGHIJ', 500]]
+    assert len(game.hiscores[0][0]) == 10
+
+
+def test_name_stored_is_capped_on_load_too():
+    bomb.save_highscores([['ABCDEFGHIJKLMNOP', 500]])
+    assert bomb.load_highscores() == [['ABCDEFGHIJ', 500]]
+    assert bomb._clean_name('ABCDEFGHIJKLMNOP') == 'ABCDEFGHIJ'
+
+
+def test_letters_do_not_open_settings_while_popup_is_open():
+    game = setup(500, [])
+    assert game.hs_popup is True
+    ui = bomb.SettingsUI(bomb.Settings())
+    frames(game, 40, [key('m'), key('p'), key('w'), key('s'), key('a'),
+                      key_k(pygame.K_m, 'm'), key_k(pygame.K_p, 'p')], ui=ui)
+    # "M" und "P" wurden als Buchstaben getippt, nicht als Menü-Öffner / Pause
+    assert ui.open is False
+    assert game.state == bomb.STATE_OVER
+    assert game.hs_name == 'mpwsa' + 'mp'
+    frames(game, 5, [enter()])
+    assert game.hiscores == [['MPWSAMP', 500]]
+    # nach dem Popup funktioniert M wieder
+    frames(game, 5, [key_k(pygame.K_m, 'm')], ui=ui)
+    assert ui.open is True
 
 
 def test_default_name():
@@ -233,6 +281,9 @@ if __name__ == '__main__':
     test_load_empty()
     test_popup_and_save()
     test_backspace_and_cap()
+    test_name_limit_is_10()
+    test_name_stored_is_capped_on_load_too()
+    test_letters_do_not_open_settings_while_popup_is_open()
     test_default_name()
     test_rank_insertion()
     test_no_popup_below()
