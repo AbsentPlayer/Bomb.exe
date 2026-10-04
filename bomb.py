@@ -3,6 +3,10 @@ import json
 import os
 import random
 import sys
+import hashlib
+import hmac
+import base64
+import ctypes
 import pygame
 from collections import deque
 
@@ -1010,18 +1014,21 @@ class Game:
 
     @property
     def score_mult(self):
-        """Effektiver Score-Multiplikator. Es gewinnt der groesste aktive Bonus:
-        5x nach einem Sniper-Kill, 5x ab 10er Double-/Multi-Kill-Streak,
-        2x bei aktivem Sniper oder ab 5er-Streak. Alles endet bei Schaden."""
-        m = 1
+        """Score-Multiplikator: mit jedem 5er-Block der Double-/Multi-Kill-
+        Streak verdoppelt sich der Basis-Mult (5 -> x2, 10 -> x4, 15 -> x8, ...).
+        Ist ein Sniper aktiv, wird mit *2 multipliziert. Nach einem Sniper-Kill
+        wird mit *5 multipliziert. Alle Boni werden nur bei Schaden zurueckgesetzt."""
+        st = self.double_kill_streak
+        if st < 5:
+            base = 1
+        else:
+            k = st // 5  # 1 bei 5-9, 2 bei 10-14, 3 bei 15-19 usw.
+            base = 1 << k  # 2^k
+        m = base
         if self.snipers:
-            m = SNIPER_MULT
-        if self.double_kill_streak >= DK_STREAK_X5:
-            m = max(m, SNIPER_KILL_MULT)
-        elif self.double_kill_streak >= DK_STREAK_X2:
-            m = max(m, SNIPER_MULT)
+            m *= SNIPER_MULT
         if self.mult >= SNIPER_KILL_MULT:
-            m = max(m, self.mult)
+            m *= SNIPER_KILL_MULT
         return m
 
     def spawn_enemy(self):
@@ -1964,19 +1971,119 @@ def _hs_file():
     return os.path.join(base, 'highscores.json')
 
 
+def _machine_seed():
+    """Geraetegebundener Wert. Laeuft nicht auf einem Datentraeger, den der
+    Spieler einfach kopieren kann: die Windows MachineGuid aus der
+    Registry, ergaenzt um den Hostnamen. Ohne Registry-Zugriff (portable
+    Builds) faellt der Hostname allein zurueck."""
+    parts = []
+    try:
+        import winreg
+        try:
+            k = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                               r'SOFTWARE\Microsoft\Cryptography',
+                               0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
+            with k:
+                parts.append(str(winreg.QueryValueEx(k, 'MachineGuid')[0]))
+        except OSError:
+            pass
+    except Exception:
+        pass
+    try:
+        parts.append(os.environ.get('COMPUTERNAME', ''))
+    except Exception:
+        pass
+    try:
+        # Prozess-/Installationsbreite Streuung gegen triviales Kopieren
+        parts.append(str(ctypes.windll.kernel32.GetCurrentProcessId()))
+    except Exception:
+        pass
+    return '|'.join(p for p in parts if p)
+
+
+def _hs_key():
+    """Schluessel fuer die Signatur der Highscore-Datei.
+
+    Bewusst KEIN geheimer Wert im Quelltext: ein im Programm sichtbarer
+    Schluessel laesst sich aus der EXE auslesen und damit nachbilden. Der
+    Schluessel wird deshalb zur Laufzeit aus Maschinen-ID und einem
+    pro Installationsordner zufaelligen Salt abgeleitet. Damit sind
+    nachtraegliche Edits von highscores.json auf diesem Rechner nicht mehr
+    moeglich - und weil der Salt in einer zweiten Datei steckt, deren Wert
+    sich pro Neuinstallation aendert, gilt das auch nicht fuer eine
+    weitergegebene Datei."""
+    salt_path = os.path.join(os.path.dirname(_hs_file()), '.bombkey')
+    salt = b''
+    try:
+        with open(salt_path, 'rb') as fh:
+            salt = fh.read(64)
+    except Exception:
+        pass
+    if not salt:
+        salt = base64.b64encode(os.urandom(32))
+        try:
+            with open(salt_path, 'wb') as fh:
+                fh.write(salt)
+        except Exception:
+            # Nur-Lese-Ordner: dann bleibt der Key stabil fuer die Session
+            salt = b'fallback-salt'
+    return hashlib.sha256(salt + _machine_seed().encode('utf-8', 'replace')).digest()
+
+
+def _hs_payload(hs):
+    return json.dumps([[n, int(s)] for n, s in hs],
+                      ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+
+
+def _hs_sign(hs):
+    return hmac.new(_hs_key(), _hs_payload(hs).encode('utf-8'), hashlib.sha256).hexdigest()
+
+
+def _hs_write(path, hs):
+    """Atomar schreiben: erst in eine Temp-Datei, dann os.replace. So kann ein
+    Absturz mitten im Schreiben die Liste nicht zerstoeren."""
+    doc = {
+        'version': 2,
+        'sig': _hs_sign(hs),
+        'scores': [[n, int(s)] for n, s in hs],
+    }
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as fh:
+        json.dump(doc, fh, ensure_ascii=False)
+    os.replace(tmp, path)
+
+
+def _hs_read(path):
+    """Liefert (entries, signiert). Fehlt die Signatur oder passt sie nicht,
+    ist die Datei manipuliert und wird verworfen."""
+    with open(path, 'r', encoding='utf-8') as fh:
+        data = json.load(fh)
+    if isinstance(data, dict):
+        entries = data.get('scores') or []
+        sig = data.get('sig') or ''
+        parsed = []
+        for e in entries:
+            if isinstance(e, (list, tuple)) and len(e) == 2:
+                parsed.append([str(e[0]), int(e[1])])
+            elif isinstance(e, dict):
+                parsed.append([str(e.get('name', '')), int(e.get('score', 0))])
+        return parsed, (sig if isinstance(sig, str) else '')
+    # Altes, unsigniertes Format (v1): wird nicht mehr akzeptiert
+    raise ValueError('unsigned highscore file')
+
+
 def load_highscores():
+    """Liest die Liste und verifiziert die Signatur. Bei Manipulation, korrupter
+    Datei oder fehlender Datei wird eine leere Liste geliefert."""
     out = []
     try:
-        with open(_hs_file(), 'r', encoding='utf-8') as fh:
-            data = json.load(fh)
-        for e in data:
-            name = str(e.get('name', '')).strip().upper()[:HS_NAME_MAX]
-            try:
-                score = int(e.get('score', 0))
-            except (TypeError, ValueError):
-                score = 0
+        raw, sig = _hs_read(_hs_file())
+        if not hmac.compare_digest(sig, _hs_sign(raw)):
+            return []
+        for name, score in raw:
+            name = str(name).strip().upper()[:HS_NAME_MAX] or 'PLAYER'
             if score > 0:
-                out.append([name or 'PLAYER', score])
+                out.append([name, score])
     except Exception:
         pass
     out.sort(key=lambda e: -e[1])
@@ -1985,8 +2092,7 @@ def load_highscores():
 
 def save_highscores(hs):
     try:
-        with open(_hs_file(), 'w', encoding='utf-8') as fh:
-            json.dump([{'name': n, 'score': s} for n, s in hs], fh, ensure_ascii=False)
+        _hs_write(_hs_file(), hs)
     except Exception:
         pass
 

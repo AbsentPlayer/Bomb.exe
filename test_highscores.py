@@ -76,10 +76,11 @@ bomb._hs_file = lambda: os.path.join(TMP, 'highscores.json')
 def test_load_empty():
     assert bomb.load_highscores() == []
     data = [{'name': '  AB ', 'score': 50}, {'name': 'CD', 'score': 1}, {'name': 'Z', 'score': 100}]
+    # Alte, unsignierte Dateien werden abgelehnt (Manipulationsschutz)
     with open(bomb._hs_file(), 'w') as fh:
         json.dump(data, fh)
     out = bomb.load_highscores()
-    assert out == [['Z', 100], ['AB', 50], ['CD', 1]]
+    assert out == []
 
 
 def test_popup_and_save():
@@ -95,7 +96,9 @@ def test_popup_and_save():
     assert game.hs_rank == 0
     assert game.hiscores == [['MAX', 500]]
     data = json.load(open(bomb._hs_file()))
-    assert data == [{'name': 'MAX', 'score': 500}]
+    assert isinstance(data, dict)
+    assert 'scores' in data and 'sig' in data
+    assert data['scores'] == [['MAX', 500]]
     assert bomb.load_highscores() == [['MAX', 500]]
 
 

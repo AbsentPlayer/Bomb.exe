@@ -542,7 +542,7 @@ def test_score_mult_5x_wins_over_new_sniper():
     assert game.score_mult == bomb.SNIPER_KILL_MULT
     game.mult = bomb.SNIPER_KILL_MULT
     game.snipers.append(bomb.Sniper(1, 1))
-    assert game.score_mult == bomb.SNIPER_KILL_MULT
+    assert game.score_mult == bomb.SNIPER_KILL_MULT * bomb.SNIPER_MULT
     game.mult = 1
     assert game.score_mult == bomb.SNIPER_MULT
 
@@ -1002,7 +1002,8 @@ def test_double_kill_streak_grants_x2_at_five_and_x5_at_ten():
     assert game.score_mult == bomb.SNIPER_MULT
     feed(dbl)
     assert game.double_kill_streak == bomb.DK_STREAK_X5
-    assert game.score_mult == bomb.SNIPER_KILL_MULT
+    # Neue Logik: 10er-Streak -> x4 (2^(10//5)=4), ohne Sniper-Kill-Flag bleibt es 4
+    assert game.score_mult == 4
 
 
 def test_double_kill_streak_survives_single_kill_bomb():
@@ -1037,7 +1038,7 @@ def test_double_kill_streak_resets_on_damage():
         game.enemies = [bomb.Enemy(5, 3), bomb.Enemy(7, 3)]
         game.explode(6, 3, 1)
     assert game.double_kill_streak == bomb.DK_STREAK_X5
-    assert game.score_mult == bomb.SNIPER_KILL_MULT
+    assert game.score_mult == 4
     game.player.invuln = 0.0
     game.hurt_player()
     assert game.double_kill_streak == 0
