@@ -347,7 +347,7 @@ class SettingsUI:
             return False
         if abs(hx) >= abs(hy):
             return self._nudge(-1 if hx < 0 else (1 if hx > 0 else 0), 0)
-        return self._nudge(0, 1 if hy > 0 else -1)
+        return self._nudge(0, -1 if hy > 0 else 1)
 
     def _pad_dir(self, button):
         if button == JOY_DPAD[0]:
@@ -2162,9 +2162,9 @@ def _joy_dir():
             dup = _joy_button(JOY_DPAD[0])
             ddn = _joy_button(JOY_DPAD[1])
             if dup and not ddn:
-                fy = 1
-            elif ddn and not dup:
                 fy = -1
+            elif ddn and not dup:
+                fy = 1
         try:
             hx, hy = JOY.get_hat(0)
             if fx == 0 and hx != 0:
