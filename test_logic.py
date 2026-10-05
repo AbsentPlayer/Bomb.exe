@@ -16,6 +16,12 @@ def setup():
     return game
 
 
+def clear_grid(game):
+    for y in range(bomb.GRID_H):
+        for x in range(bomb.GRID_W):
+            game.grid[y][x] = bomb.EMPTY
+
+
 def test_grid_shape():
     g = bomb.generate_grid()
     assert len(g) == bomb.GRID_H
@@ -357,7 +363,9 @@ def test_sniper_spawns_after_3_multikills():
     assert any(getattr(st, 'label', None) == 'Multi-Kill' for st in game.stars)
 
 
-def test_sniper_respawns_unlimited_but_never_two_at_once():
+def test_sniper_respawns_but_cooldown_blocks_a_chain():
+    """Der Cooldown verhindert die Sniper-Kette, danach ruft der naechste
+    Multi-Kill den naechsten Sniper - und nie mehr als einen gleichzeitig."""
     game = setup()
     g = game.grid
     game.player.sx, game.player.sy = 15, 12
@@ -375,7 +383,7 @@ def test_sniper_respawns_unlimited_but_never_two_at_once():
         game.enemies = _five_row(g, row)
         game.explode(6, row, 2)
 
-    for _ in range(6):
+    for _ in range(3):
         for _ in range(3):
             multi_kill()
             assert len(game.snipers) <= 1
@@ -388,8 +396,23 @@ def test_sniper_respawns_unlimited_but_never_two_at_once():
         # Sniper wegschiessen
         game.grid[sn.sy][sn.sx] = bomb.EMPTY
         game.explode(sn.sx, sn.sy, 0)
-        assert len(game.snipers) == 0
-        assert bomb._SNIPERWARN_CH is None
+        assert game.sniper_cd == bomb.SNIPER_COOLDOWN
+        # Keine Kette: der volle Streak bringt in den 30 s keinen Sniper
+        for _ in range(3):
+            multi_kill()
+            assert len(game.snipers) == 0
+        # Cooldown real ablaufen lassen. Gegner-Spawn, Levelwechsel und
+        # Schaden werden ausgeblendet, damit der Test deterministisch bleibt.
+        game.enemies = []
+        game.player.invuln = 1e9
+        game.spawn_t = 1e9
+        game.time = 1e9
+        for _ in range(int(bomb.SNIPER_COOLDOWN * 60) + 1):
+            game.update(1.0 / 60.0)
+        assert game.sniper_cd == 0.0
+        # Danach ruft der naechste Multi-Kill ihn sofort wieder.
+        multi_kill()
+        assert len(game.snipers) == 1
 
 
 def test_sniper_warning_stops_when_sniper_dies():
@@ -495,17 +518,18 @@ def test_score_mult_2x_while_sniper_alive_5x_after_kill_until_damage():
     game.enemies = _five_row(g, 8)
     game.explode(6, 8, 2)
     assert game.score == 5 * 50 * bomb.SNIPER_KILL_MULT
-    # Der vierte Multi-Kill addiert weiter (Streak resettet nur bei Schaden)
-    # und spawnt deshalb sofort den naechsten Sniper.
+    # Der vierte Multi-Kill addiert weiter (Streak resettet nur bei Schaden),
+    # spawnt aber wegen des Sniper-Cooldowns keinen neuen Sniper.
     assert game.multi_kill_streak == 4
-    assert len(game.snipers) == 1
+    assert len(game.snipers) == 0
+    assert game.sniper_cd == bomb.SNIPER_COOLDOWN
     game.player.invuln = 0.0
     game.hurt_player()
     assert game.mult == 1
     assert game.multi_kill_streak == 0
     assert game.double_kill_streak == 0
-    # Der Sniper lebt noch, deshalb 2x statt 1x
-    assert game.score_mult == bomb.SNIPER_MULT
+    # Der Sniper ist tot, der Sniper-Kill-Bonus ist weg -> wieder 1x
+    assert game.score_mult == 1
     game.snipers = []
     assert game.score_mult == 1
 
@@ -1083,6 +1107,154 @@ def test_sniper_kill_does_not_feed_double_kill_streak():
     assert len(game.snipers) == 0
 
 
+def _sniper_cooldown_setup():
+    game = setup()
+    game.player.sx, game.player.sy = 15, 12
+    game.player.x, game.player.y = 15.0, 12.0
+    game.player.invuln = 1e9
+    return game
+
+
+def _multikill_bomb(game, row):
+    """Bombe mit 5 Kills -> Streak +1, Counter der Zeilen."""
+    game.enemies = _five_row(game.grid, row)
+    game.explode(6, row, 2)
+
+
+def test_sniper_cooldown_constant_is_30_seconds():
+    assert bomb.SNIPER_COOLDOWN == 30.0
+
+
+def test_sniper_cooldown_starts_at_zero():
+    game = _sniper_cooldown_setup()
+    assert game.sniper_cd == 0.0
+
+
+def test_sniper_cooldown_not_counting_while_sniper_alive():
+    game = _sniper_cooldown_setup()
+    game.snipers = [bomb.Sniper(4, 4)]
+    for _ in range(120):
+        game.update(1.0 / 60.0)
+    assert game.sniper_cd == 0.0
+
+
+def test_sniper_cooldown_armed_on_bomb_kill():
+    game = _sniper_cooldown_setup()
+    g = game.grid
+    for x, y in ((3, 6), (4, 6), (5, 6), (4, 5), (4, 7)):
+        g[y][x] = bomb.EMPTY
+    game.snipers = [bomb.Sniper(4, 6)]
+    game.explode(4, 6, 1)
+    assert len(game.snipers) == 0
+    # Sofort voll, der Wechsel-Frame zaehlt noch nicht herunter.
+    assert game.sniper_cd == bomb.SNIPER_COOLDOWN
+    game.update(1.0 / 60.0)
+    assert bomb.SNIPER_COOLDOWN - 1.0 < game.sniper_cd < bomb.SNIPER_COOLDOWN
+
+
+def test_sniper_cooldown_armed_by_level_change():
+    game = _sniper_cooldown_setup()
+    game.snipers = [bomb.Sniper(4, 4)]
+    game.reset_level()
+    assert len(game.snipers) == 0
+    assert game.sniper_cd == bomb.SNIPER_COOLDOWN
+
+
+def test_sniper_cooldown_ticks_down_in_real_time():
+    game = _sniper_cooldown_setup()
+    g = game.grid
+    for x, y in ((3, 6), (4, 6), (5, 6), (4, 5), (4, 7)):
+        g[y][x] = bomb.EMPTY
+    game.snipers = [bomb.Sniper(4, 6)]
+    game.explode(4, 6, 1)
+    for _ in range(300):
+        game.update(1.0 / 60.0)
+    assert abs(game.sniper_cd - (bomb.SNIPER_COOLDOWN - 300 / 60.0)) < 0.05
+
+
+def test_sniper_cooldown_expires_at_zero_and_never_goes_negative():
+    game = _sniper_cooldown_setup()
+    game.sniper_cd = 0.2
+    for _ in range(600):
+        game.update(1.0 / 60.0)
+    assert game.sniper_cd == 0.0
+
+
+def test_sniper_cooldown_blocks_respawn():
+    game = _sniper_cooldown_setup()
+    for row in (1, 3, 5):
+        _multikill_bomb(game, row)
+    assert game.multi_kill_streak >= bomb.SNIPER_STREAK
+    assert len(game.snipers) == 1
+    sn = game.snipers[0]
+    game.explode(sn.sx, sn.sy, 0)
+    assert game.sniper_cd == bomb.SNIPER_COOLDOWN
+    # Der Streak laeuft weiter, aber waehrend der Sperre kommt kein Sniper.
+    for row in (7, 9, 11):
+        _multikill_bomb(game, row)
+        game.update(1.0 / 60.0)
+    assert len(game.snipers) == 0
+    assert game.multi_kill_streak > bomb.SNIPER_STREAK
+
+
+def test_sniper_respawns_after_cooldown_expired():
+    game = _sniper_cooldown_setup()
+    for row in (1, 3, 5):
+        _multikill_bomb(game, row)
+    assert len(game.snipers) == 1
+    sn = game.snipers[0]
+    game.explode(sn.sx, sn.sy, 0)
+    _multikill_bomb(game, 7)
+    assert len(game.snipers) == 0
+    # Cooldown abgelaufen: der naechste Multi-Kill ruft ihn sofort wieder.
+    game.sniper_cd = 0.0
+    _multikill_bomb(game, 9)
+    assert len(game.snipers) == 1
+
+
+def test_sniper_cooldown_survives_level_change():
+    game = _sniper_cooldown_setup()
+    game.sniper_cd = 12.0
+    game.reset_level()
+    assert game.sniper_cd == 12.0
+
+
+def test_sniper_cooldown_cleared_by_new_game():
+    game = _sniper_cooldown_setup()
+    game.snipers = [bomb.Sniper(4, 4)]
+    game.reset_level()
+    assert game.sniper_cd == bomb.SNIPER_COOLDOWN
+    game.new_game()
+    assert game.sniper_cd == 0.0
+
+
+def test_sniper_cooldown_does_not_run_while_paused():
+    game = _sniper_cooldown_setup()
+    game.sniper_cd = 20.0
+    game.state = bomb.STATE_PAUSED
+    for _ in range(600):
+        game.update(1.0 / 60.0)
+    assert game.sniper_cd == 20.0
+
+
+def test_sniper_cooldown_does_not_run_on_start_screen():
+    game = bomb.Game()
+    game.sniper_cd = 20.0
+    for _ in range(600):
+        game.update(1.0 / 60.0)
+    assert game.sniper_cd == 20.0
+
+
+def test_sniper_cooldown_badge_draws():
+    game = _sniper_cooldown_setup()
+    game.sniper_cd = 12.0
+    surf = pygame.Surface((bomb.SCREEN_W, bomb.SCREEN_H))
+    bomb.draw(surf, game, 0.5)
+    game.sniper_cd = 0.0
+    game.snipers = [bomb.Sniper(4, 4)]
+    bomb.draw(surf, game, 0.5)
+
+
 
 def test_megakill_at_single_bomb_ten_kills_sets_invuln_and_star():
     game = setup()
@@ -1129,14 +1301,100 @@ def test_megakill_star_draws():
 
 def test_score_text_on_explosion_with_gain():
     game = setup()
+    clear_grid(game)
     g = game.grid
     g[6][8] = bomb.BRICK
     game.player.sx, game.player.sy = 15, 12
     game.explode(6, 8, 3)
+    # Eine Anzeige je Zelle mit Punktegewinn, also eine fuer den Brick.
+    texts = [ft for ft in game.score_floating_texts if ft['text'] == '10']
+    assert len(texts) == 1
+    ft = texts[0]
+    assert ft['age'] == 0.0
+    assert ft['text'] == str(10)
+    # Sitzt auf der zerstoerten Zelle, nicht beim Spieler.
+    assert (ft['x'], ft['y']) == (bomb.MARGIN_L + 8 * bomb.TILE + bomb.TILE // 2,
+                                  bomb.MARGIN_T + 6 * bomb.TILE + bomb.TILE // 2)
+    px = bomb.MARGIN_L + game.player.sx * bomb.TILE + bomb.TILE // 2
+    py = bomb.MARGIN_T + game.player.sy * bomb.TILE + bomb.TILE // 2
+    assert (ft['x'], ft['y']) != (px, py)
+
+
+def test_score_text_sums_to_total_gain():
+    game = setup()
+    clear_grid(game)
+    g = game.grid
+    g[6][8] = bomb.BRICK
+    game.player.sx, game.player.sy = 15, 12
+    game.explode(6, 8, 3)
+    total = sum(int(ft['text']) for ft in game.score_floating_texts)
+    assert total == game.score
+
+
+def test_score_text_one_per_damaged_cell():
+    game = setup()
+    clear_grid(game)
+    g = game.grid
+    for x in range(6, 10):
+        g[8][x] = bomb.BRICK
+    game.player.sx, game.player.sy = 15, 12
+    game.explode(8, 8, 3)
+    texts = game.score_floating_texts
+    assert len(texts) == 4
+    assert len({(ft['x'], ft['y']) for ft in texts}) == 4
+
+
+def test_score_text_on_enemy_at_enemy_position():
+    game = setup()
+    clear_grid(game)
+    game.enemies.clear()
+    game.player.sx, game.player.sy = 15, 12
+    game.enemies.append(bomb.Enemy(10, 10))
+    e = game.enemies[0]
+    ex = bomb.MARGIN_L + e.x * bomb.TILE + bomb.TILE // 2
+    ey = bomb.MARGIN_T + e.y * bomb.TILE + bomb.TILE // 2
+    game.explode(e.sx, e.sy, 1)
     assert len(game.score_floating_texts) == 1
     ft = game.score_floating_texts[0]
-    assert ft['text'] == str(game.score)
-    assert ft['age'] == 0.0
+    assert ft['text'] == '50'
+    assert ft['x'] == ex
+    assert ft['y'] == ey
+
+
+def test_score_text_capped_at_max_count():
+    game = setup()
+    game.score_floating_texts = []
+    for i in range(bomb.FT_MAX_COUNT + 25):
+        game._score_text(float(i), float(i), 10)
+    assert len(game.score_floating_texts) == bomb.FT_MAX_COUNT
+    # Der aelteste Eintrag ist raus, der juengste bleibt.
+    assert game.score_floating_texts[-1]['x'] == float(bomb.FT_MAX_COUNT + 24)
+
+
+def test_score_text_growth_range():
+    assert bomb.FT_START_SIZE == 15
+    assert bomb.FT_END_SIZE == 100
+    assert bomb.FT_START_SIZE < bomb.FT_END_SIZE
+
+
+def test_score_text_alpha_is_half_of_previous_value():
+    # Vorher 153 (60% Deckkraft), jetzt nochmal 50% mehr Transparenz.
+    assert bomb.FT_ALPHA == 76
+    assert bomb.FT_ALPHA < 153
+
+
+def test_score_text_sizes_at_start_and_end():
+    game = setup()
+    game.score_floating_texts = [
+        {'text': '10', 'age': 0.0, 'x': 100.0, 'y': 100.0},
+        {'text': '10', 'age': bomb.FT_MAX_AGE - 0.001, 'x': 100.0, 'y': 100.0},
+    ]
+    sizes = []
+    for ft in game.score_floating_texts:
+        p = ft['age'] / bomb.FT_MAX_AGE
+        sizes.append(int(round(bomb.FT_START_SIZE + (bomb.FT_END_SIZE - bomb.FT_START_SIZE) * p)))
+    assert sizes[0] == bomb.FT_START_SIZE
+    assert abs(sizes[1] - bomb.FT_END_SIZE) <= 1
 
 
 def test_score_text_none_on_no_score_gain():
@@ -1151,7 +1409,7 @@ def test_score_text_ages_out_in_update():
     g = game.grid
     g[6][8] = bomb.BRICK
     game.explode(6, 8, 3)
-    assert len(game.score_floating_texts) == 1
+    assert len(game.score_floating_texts) >= 1
     for _ in range(int(bomb.FT_MAX_AGE * 60) + 1):
         game.update(1.0 / 60.0)
     assert len(game.score_floating_texts) == 0
@@ -1190,7 +1448,7 @@ def main():
         test_sniper_no_shoot_wrong_line,
         test_sniper_reload,
         test_sniper_spawns_after_3_multikills,
-        test_sniper_respawns_unlimited_but_never_two_at_once,
+        test_sniper_respawns_but_cooldown_blocks_a_chain,
         test_sniper_warning_stops_when_sniper_dies,
         test_sniper_warning_stops_on_level_reset,
         test_sniper_warning_stops_even_without_explosion,
@@ -1231,11 +1489,32 @@ def main():
         test_double_kill_streak_resets_on_damage,
         test_double_kill_streak_survives_level_change,
         test_sniper_kill_does_not_feed_double_kill_streak,
+        test_sniper_cooldown_constant_is_30_seconds,
+        test_sniper_cooldown_starts_at_zero,
+        test_sniper_cooldown_not_counting_while_sniper_alive,
+        test_sniper_cooldown_armed_on_bomb_kill,
+        test_sniper_cooldown_armed_by_level_change,
+        test_sniper_cooldown_ticks_down_in_real_time,
+        test_sniper_cooldown_expires_at_zero_and_never_goes_negative,
+        test_sniper_cooldown_blocks_respawn,
+        test_sniper_respawns_after_cooldown_expired,
+        test_sniper_cooldown_survives_level_change,
+        test_sniper_cooldown_cleared_by_new_game,
+        test_sniper_cooldown_does_not_run_while_paused,
+        test_sniper_cooldown_does_not_run_on_start_screen,
+        test_sniper_cooldown_badge_draws,
         test_megakill_at_single_bomb_ten_kills_sets_invuln_and_star,
         test_megakill_not_at_single_bomb_nine_kills,
         test_megakill_star_color_cycles,
         test_megakill_star_draws,
         test_score_text_on_explosion_with_gain,
+        test_score_text_sums_to_total_gain,
+        test_score_text_one_per_damaged_cell,
+        test_score_text_on_enemy_at_enemy_position,
+        test_score_text_capped_at_max_count,
+        test_score_text_growth_range,
+        test_score_text_alpha_is_half_of_previous_value,
+        test_score_text_sizes_at_start_and_end,
         test_score_text_none_on_no_score_gain,
         test_score_text_ages_out_in_update,
         test_score_text_draw,

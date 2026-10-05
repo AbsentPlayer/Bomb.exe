@@ -16,6 +16,9 @@ bomb.ico
 bomb.exe
 bomb_debug.log
 
+# Local high-score signing salt - machine bound, never commit it
+.bombkey
+
 # Builds
 _build*
 build/

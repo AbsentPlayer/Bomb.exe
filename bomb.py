@@ -35,6 +35,9 @@ MAX_LIVES = 3
 DOUBLE_KILL_KILLS = 2
 MULTI_KILL_KILLS = 5
 SNIPER_STREAK = 3
+# Nach dem Tod des letzten Sniper muss erst diese Zeit verstreichen, bevor
+# ueberhaupt wieder einer spawnen kann. Verhindert Sniper-Ketten.
+SNIPER_COOLDOWN = 30.0
 SNIPER_MULT = 2
 SNIPER_KILL_MULT = 5
 BOMB_COOLDOWN = 0.5
@@ -51,10 +54,16 @@ MEGA_KILL_KILLS = 10
 MEGA_INVULN_TIME = 7.0
 MEGA_COLORS = ((255, 255, 0), (255, 0, 0), (0, 255, 0), (0, 255, 255))
 FT_MAX_AGE = 4.0
-FT_START_SIZE = 30
-FT_END_SIZE = 200
+FT_START_SIZE = 15
+FT_END_SIZE = 100
 FT_COLOR = (255, 255, 0)
-FT_ALPHA = 153  # 40% Transparenz (60% sichtbar)
+# BLEND_RGBA_MULT multipliziert die Alphas: kleiner Wert = durchsichtiger.
+# 76/255 ~= 30% Deckkraft, also rund 70% Transparenz (nochmal 50% mehr als
+# die vorherigen 153).
+FT_ALPHA = 76
+# Deckel gegen unkontrollierte Textflut, wenn mehrere Bomben gleichzeitig
+# explodieren. Der aelteste Eintrag wird zuerst verworfen.
+FT_MAX_COUNT = 40
 
 STATE_START = 0
 STATE_PLAY = 1
@@ -993,6 +1002,10 @@ class Game:
         # Schaden zurueckgesetzt (Game.hurt_player).
         self.multi_kill_streak = 0
         self.double_kill_streak = 0
+        # Sniper-Sperre: loescht nur ein neues Spiel. Beides steht vor
+        # reset_level, damit had_sniper dort nicht noch den alten Stand sieht.
+        self.sniper_cd = 0.0
+        self.snipers = []
         self.level = 1
         self.score_floating_texts = []
         self.state = STATE_START
@@ -1005,6 +1018,7 @@ class Game:
         self.reset_level()
 
     def reset_level(self):
+        had_sniper = bool(self.snipers)
         self.grid = generate_grid()
         self.bombs = []
         self.enemies = []
@@ -1016,6 +1030,10 @@ class Game:
         self.shots = []
         self.sniper_hold = 0.0
         stop_sniper_warning()
+        # Ein Levelwechsel, der den letzten Sniper mitnimmt, zaehlt genauso
+        # wie ein Sniper-Kill und schaltet die Sperre scharf.
+        if had_sniper:
+            self._sniper_removed()
         self.player = Player(*PLAYER_START)
         self.time = LEVEL_TIME
         self.spawn_t = ENEMY_INTERVAL
@@ -1059,6 +1077,16 @@ class Game:
         x, y = random.choice(cands)
         self.enemies.append(Enemy(x, y))
 
+    def _sniper_removed(self):
+        """Letzter Sniper weg -> Cooldown scharf schalten.
+
+        Solange noch ein Sniper lebt, passiert nichts, damit eine Bombe, die
+        mehrere Snipers auf einmal trifft, nicht mehrfach zuruecksetzt.
+        """
+        if self.snipers:
+            return
+        self.sniper_cd = SNIPER_COOLDOWN
+
     def _spawn_sniper(self):
         px, py = self.player.sx, self.player.sy
         occupied = {(px, py)}
@@ -1075,6 +1103,7 @@ class Game:
             return
         x, y = max(cands, key=lambda c: math.hypot(c[0] - px, c[1] - py))
         self.snipers.append(Sniper(x, y))
+        self.sniper_cd = 0.0
         sx = MARGIN_L + x * TILE + TILE // 2
         sy = MARGIN_T + y * TILE + TILE // 2
         self.stars.append(CrosshairEffect(sx, sy))
@@ -1146,6 +1175,25 @@ class Game:
                (e.prev_sx == psx and e.prev_sy == psy and e.sx == ppx and e.sy == ppy):
                 self.hurt_player()
 
+    def _score_text(self, px, py, amount):
+        """Punkte-Anzeige an der Schadensstelle (Pixelkoordinaten).
+
+        Der Text sitzt dort, wo der Punktezuwachs tatsaechlich entstanden ist
+        (zerstoerter Brick, eingesammeltes Powerup, getoeteter Gegner/Sniper),
+        nicht mehr am Spieler. Da jede Zelle ihre eigene Anzeige bekommt,
+        koennen mehrere davon gleichzeitig auf dem Schirm stehen.
+        """
+        if amount <= 0:
+            return
+        self.score_floating_texts.append({
+            'text': str(amount),
+            'age': 0.0,
+            'x': px,
+            'y': py,
+        })
+        while len(self.score_floating_texts) > FT_MAX_COUNT:
+            self.score_floating_texts.pop(0)
+
     def explode(self, cx, cy, radius):
         self.score_before = self.score
         self.shake = max(self.shake, 1.0)
@@ -1167,6 +1215,7 @@ class Game:
                     self.effects.append(Effect(x, y, 'brick'))
                     bx = MARGIN_L + x * TILE + TILE // 2
                     by = MARGIN_T + y * TILE + TILE // 2
+                    self._score_text(bx, by, 10 * mult)
                     self.particles.append(Particle(bx, by, random.uniform(-60, 60), random.uniform(-90, -10), 0, 120, BRICK_SHADY, 5))
                     self.particles.append(Particle(bx, by, random.uniform(-80, 80), random.uniform(-80, 80), 0, 120, BRICK_TOP, 4))
                     if random.random() < 0.15:
@@ -1181,6 +1230,7 @@ class Game:
                             self.score += 5 * mult
                             bx = MARGIN_L + x * TILE + TILE // 2
                             by = MARGIN_T + y * TILE + TILE // 2
+                            self._score_text(bx, by, 5 * mult)
                             self.particles.append(Particle(bx, by, random.uniform(-60, 60), random.uniform(-60, 60), 0, 120, PUP_IN, 5))
                     for e in list(self.enemies):
                         if e.sx == x and e.sy == y:
@@ -1189,6 +1239,7 @@ class Game:
                             self.score += 50 * mult
                             ex = MARGIN_L + e.x * TILE + TILE // 2
                             ey = MARGIN_T + e.y * TILE + TILE // 2
+                            self._score_text(ex, ey, 50 * mult)
                             self.particles.append(Particle(ex, ey, random.uniform(-90, 90), random.uniform(-90, 90), 0, 120, ENEMY, 6))
                             self.particles.append(Particle(ex, ey, random.uniform(-90, 90), random.uniform(-90, 90), 0, 120, EYE, 5))
                     for sn in list(self.snipers):
@@ -1197,8 +1248,10 @@ class Game:
                             self.score += 100 * mult
                             self.mult = SNIPER_KILL_MULT
                             stop_sniper_warning()
+                            self._sniper_removed()
                             snx = MARGIN_L + sn.sx * TILE + TILE // 2
                             sny = MARGIN_T + sn.sy * TILE + TILE // 2
+                            self._score_text(snx, sny, 100 * mult)
                             self.particles.append(Particle(snx, sny, random.uniform(-90, 90), random.uniform(-90, 90), 0, 120, (120, 124, 150), 6))
                             self.particles.append(Particle(snx, sny, random.uniform(-90, 90), random.uniform(-90, 90), 0, 120, EYE, 5))
                     if self.player.sx == x and self.player.sy == y and self.player.invuln <= 0:
@@ -1211,7 +1264,8 @@ class Game:
             sy = MARGIN_T + cy * TILE + TILE // 2
             self.stars.append(StarEffect(sx, sy, 'Multi-Kill'))
             play_sfx('multikill')
-            if self.multi_kill_streak >= SNIPER_STREAK and not self.snipers and self.state == STATE_PLAY:
+            if (self.multi_kill_streak >= SNIPER_STREAK and not self.snipers
+                    and self.state == STATE_PLAY and self.sniper_cd <= 0.0):
                 self._spawn_sniper()
         elif killed_enemies >= DOUBLE_KILL_KILLS:
             # Auch ein reiner Double-Kill zaehlt fuer die Belohnungs-Streak -
@@ -1227,12 +1281,8 @@ class Game:
         # Mega-Kill: 10+ Gegner durch eine einzige Bombe (nicht die Streak).
         if killed_enemies >= MEGA_KILL_KILLS:
             self._mega_kill(cx, cy)
-        score_delta = self.score - self.score_before
-        if score_delta > 0:
-            self.score_floating_texts.append({
-                'text': str(score_delta),
-                'age': 0.0,
-            })
+        # Kein gesammelter Text mehr: jede Zelle, die Punkte gebracht hat,
+        # hat ihre eigene Anzeige an der jeweiligen Schadensstelle bekommen.
 
     def _mega_kill(self, cx, cy):
         sx = MARGIN_L + cx * TILE + TILE // 2
@@ -1316,6 +1366,9 @@ class Game:
             for b in self.bombs:
                 b.update(dt, self)
             self.bombs = [b for b in self.bombs if not b.dead]
+            # Sniper-Cooldown: laeuft nur im Spiel, wird von _sniper_removed
+            # scharf geschaltet und von _spawn_sniper wieder geloescht.
+            self.sniper_cd = max(0.0, self.sniper_cd - dt)
             for p in self.powerups:
                 p.update(dt)
             for pt in list(self.particles):
@@ -1497,6 +1550,14 @@ def draw_hud(surf, game, ox, oy, t=0.0):
         hx = SCREEN_W // 2 - img.get_width() // 2
         surf.blit(img, (hx, 52))
         pygame.draw.rect(surf, col, pygame.Rect(hx, 76, img.get_width(), 2))
+    elif game.sniper_cd > 0.0:
+        # Sperre nach dem letzten Sniper: gedimmt und ohne Puls, damit sie
+        # nicht wie eine aktive Bedrohung aussieht.
+        cd = make_font(None, 22, True)
+        img = cd.render('SNIPER COOLDOWN %ds' % int(math.ceil(game.sniper_cd)), True, TEXT_DIM)
+        hx = SCREEN_W // 2 - img.get_width() // 2
+        surf.blit(img, (hx, 52))
+        pygame.draw.rect(surf, TEXT_DIM, pygame.Rect(hx, 76, img.get_width(), 2))
     txt(surf, ox + 920, 16, 'BOMBS', fs, TEXT_DIM)
     bomb_x = ox + 920
     cooling = game.player.bomb_cd > 0.0
@@ -1750,8 +1811,13 @@ def _draw_score_floating_texts(frame, game):
     for ft in game.score_floating_texts:
         p = ft['age'] / FT_MAX_AGE
         size = int(round(FT_START_SIZE + (FT_END_SIZE - FT_START_SIZE) * p))
-        px = MARGIN_L + game.player.sx * TILE + TILE // 2
-        py = MARGIN_T + game.player.sy * TILE + TILE // 2
+        # Anzeige sitzt an der Schadensstelle; nur Eintraege ohne Position
+        # (Altbestand) fallen auf den Spieler zurueck.
+        if 'x' in ft:
+            px, py = ft['x'], ft['y']
+        else:
+            px = MARGIN_L + game.player.sx * TILE + TILE // 2
+            py = MARGIN_T + game.player.sy * TILE + TILE // 2
         img = _floating_font(size).render(ft['text'], True, FT_COLOR)
         img.fill((255, 255, 255, FT_ALPHA), special_flags=pygame.BLEND_RGBA_MULT)
         frame.blit(img, (px - img.get_width() // 2, py - img.get_height() // 2))
