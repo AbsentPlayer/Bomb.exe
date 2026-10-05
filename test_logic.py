@@ -1084,31 +1084,30 @@ def test_sniper_kill_does_not_feed_double_kill_streak():
 
 
 
-def test_megakill_at_streak_ten_sets_invuln_and_star():
+def test_megakill_at_single_bomb_ten_kills_sets_invuln_and_star():
     game = setup()
-    for _ in range(10):
-        for x in range(9, 12):
-            game.grid[11][x] = bomb.EMPTY
-        game.enemies = [bomb.Enemy(9, 11), bomb.Enemy(10, 11), bomb.Enemy(11, 11)]
-        game.player.sx, game.player.sy = 15, 12
-        game.player.x, game.player.y = 15.0, 12.0
-        game.player.lives = bomb.MAX_LIVES
-        game.explode(10, 11, 3)
+    for x in range(5, 16):
+        game.grid[11][x] = bomb.EMPTY
+    game.enemies = [bomb.Enemy(x, 11) for x in range(6, 16)]
+    game.player.sx, game.player.sy = 15, 12
+    game.player.x, game.player.y = 15.0, 12.0
+    game.player.lives = bomb.MAX_LIVES
+    game.explode(10, 11, 5)
+    assert len(game.enemies) == 0
     assert game.player.mega == bomb.MEGA_INVULN_TIME
     assert game.player.invuln == bomb.MEGA_INVULN_TIME
     assert game.stars[-1].label == 'Mega-Kill'
 
 
-def test_megakill_not_at_streak_nine():
+def test_megakill_not_at_single_bomb_nine_kills():
     game = setup()
-    for _ in range(9):
-        for x in range(9, 12):
-            game.grid[11][x] = bomb.EMPTY
-        game.enemies = [bomb.Enemy(9, 11), bomb.Enemy(10, 11), bomb.Enemy(11, 11)]
-        game.player.sx, game.player.sy = 15, 12
-        game.player.x, game.player.y = 15.0, 12.0
-        game.player.lives = bomb.MAX_LIVES
-        game.explode(10, 11, 3)
+    for x in range(5, 16):
+        game.grid[11][x] = bomb.EMPTY
+    game.enemies = [bomb.Enemy(x, 11) for x in range(6, 15)]
+    game.player.sx, game.player.sy = 15, 12
+    game.player.x, game.player.y = 15.0, 12.0
+    game.player.lives = bomb.MAX_LIVES
+    game.explode(10, 11, 5)
     assert game.player.mega == 0.0
     assert game.player.invuln == 0.0
     assert 'Mega-Kill' not in [s.label for s in game.stars]
@@ -1232,8 +1231,8 @@ def main():
         test_double_kill_streak_resets_on_damage,
         test_double_kill_streak_survives_level_change,
         test_sniper_kill_does_not_feed_double_kill_streak,
-        test_megakill_at_streak_ten_sets_invuln_and_star,
-        test_megakill_not_at_streak_nine,
+        test_megakill_at_single_bomb_ten_kills_sets_invuln_and_star,
+        test_megakill_not_at_single_bomb_nine_kills,
         test_megakill_star_color_cycles,
         test_megakill_star_draws,
         test_score_text_on_explosion_with_gain,

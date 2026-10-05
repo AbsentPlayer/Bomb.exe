@@ -189,10 +189,10 @@ requirements.txt   – dependencies
 
 ## Mega-Kill, Bomben-Punkte-Anzeige und DPad
 
-- **Mega-Kill**: Bei 10 aufeinanderfolgenden Double-/Multi-Kills (Double-Kill-Streak >= 10,  auch wenn Double- und Multi-Kills beliebig gemischt sind) wird ein Mega-Kill ausgelöst.
+- **Mega-Kill**: 10+ Gegner durch eine einzige Bombe (`MEGA_KILL_KILLS = 10`, nicht die Streak) löst den Mega-Kill aus.
   - **Sound**: `megakill.mp3` neben dem Spiel (oder `G:\bomb\Mega Kill - Sound Effect.mp3`, falls vorhanden); ohne Datei wird auf den Multi-Kill-Sound zurückgefallen.
   - **Stern-Effekt**: Ein fünfziger Stern mit "Mega-Kill"-Text am Explosionsort, der zwischen den Farben #FFFF00, #FF0000, #00FF00 und #00FFFF wechselt und wächst wie der normale Stern, bis er den Bildschirm verlässt.
-  - **Immunität**: Nach einem Mega-Kill ist der Spieler 15 Sekunden unverwundbar (`MEGA_INVULN_TIME = 15.0`).
+  - **Immunität**: Nach einem Mega-Kill ist der Spieler 7 Sekunden unverwundbar (`MEGA_INVULN_TIME = 7.0`).
   - **Flicker**: Während der Immunitätszeit flackert der Spieler in den Farben #FFFF00, #FF0000, #00FF00 und #00FFFF.
   - Der Immunitätsstatus endet mit Levelwechsel (`reset_level`) bzw. neuem Spiel.
 

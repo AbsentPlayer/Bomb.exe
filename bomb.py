@@ -47,13 +47,14 @@ FREE_BOMB_TIME_SNIPER = 7.0
 ENEMY_INTERVAL = 1.0
 MAX_ENEMIES = 8
 LEVEL_TIME = 90.0
-MEGA_KILL_STREAK = 10
-MEGA_INVULN_TIME = 15.0
+MEGA_KILL_KILLS = 10
+MEGA_INVULN_TIME = 7.0
 MEGA_COLORS = ((255, 255, 0), (255, 0, 0), (0, 255, 0), (0, 255, 255))
 FT_MAX_AGE = 4.0
 FT_START_SIZE = 30
 FT_END_SIZE = 200
 FT_COLOR = (255, 255, 0)
+FT_ALPHA = 153  # 40% Transparenz (60% sichtbar)
 
 STATE_START = 0
 STATE_PLAY = 1
@@ -1223,7 +1224,8 @@ class Game:
             play_sfx('doublekill')
         # Weder Double- noch Multi-Kill: die Streaks laufen weiter, sie werden
         # ausschliesslich bei Schaden zurueckgesetzt.
-        if self.double_kill_streak >= MEGA_KILL_STREAK:
+        # Mega-Kill: 10+ Gegner durch eine einzige Bombe (nicht die Streak).
+        if killed_enemies >= MEGA_KILL_KILLS:
             self._mega_kill(cx, cy)
         score_delta = self.score - self.score_before
         if score_delta > 0:
@@ -1751,6 +1753,7 @@ def _draw_score_floating_texts(frame, game):
         px = MARGIN_L + game.player.sx * TILE + TILE // 2
         py = MARGIN_T + game.player.sy * TILE + TILE // 2
         img = _floating_font(size).render(ft['text'], True, FT_COLOR)
+        img.fill((255, 255, 255, FT_ALPHA), special_flags=pygame.BLEND_RGBA_MULT)
         frame.blit(img, (px - img.get_width() // 2, py - img.get_height() // 2))
 
 SFX = {}
