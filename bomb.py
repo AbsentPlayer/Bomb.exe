@@ -47,6 +47,13 @@ FREE_BOMB_TIME_SNIPER = 7.0
 ENEMY_INTERVAL = 1.0
 MAX_ENEMIES = 8
 LEVEL_TIME = 90.0
+MEGA_KILL_STREAK = 10
+MEGA_INVULN_TIME = 15.0
+MEGA_COLORS = ((255, 255, 0), (255, 0, 0), (0, 255, 0), (0, 255, 255))
+FT_MAX_AGE = 4.0
+FT_START_SIZE = 30
+FT_END_SIZE = 200
+FT_COLOR = (255, 255, 0)
 
 STATE_START = 0
 STATE_PLAY = 1
@@ -629,17 +636,22 @@ def star_color(t):
     )
 
 
+def mega_color(t):
+    return MEGA_COLORS[int(t * 8.0) % len(MEGA_COLORS)]
+
+
 class StarEffect:
     GROW = 300.0
     START_R = 30.0
     C1 = (255, 222, 33)
     C2 = (255, 19, 240)
 
-    def __init__(self, x, y, label=None):
+    def __init__(self, x, y, label=None, color_fn=None):
         self.x = float(x)
         self.y = float(y)
         self.age = 0.0
         self.label = label
+        self.color_fn = color_fn or star_color
         self.font = make_font(None, 34, True) if label is not None else None
 
     def update(self, dt):
@@ -652,7 +664,7 @@ class StarEffect:
         return self.radius() > max(self.x + SCREEN_W, self.y + SCREEN_H)
 
     def color(self):
-        return star_color(self.age)
+        return self.color_fn(self.age)
 
     def _points(self, r, rot):
         pts = []
@@ -930,6 +942,7 @@ class Player:
         self.prev_sx, self.prev_sy = sx, sy
         self.no_damage_time = 0.0
         self.bomb_cd = 0.0
+        self.mega = 0.0
 
     def cell_open(self, grid, sx, sy):
         if not (0 <= sx < GRID_W and 0 <= sy < GRID_H):
@@ -941,6 +954,7 @@ class Player:
         self.anim += dt
         self.invuln = max(0.0, self.invuln - dt)
         self.bomb_cd = max(0.0, self.bomb_cd - dt)
+        self.mega = max(0.0, self.mega - dt)
         self.no_damage_time += dt
         if self.speed_timer > 0:
             self.speed_timer -= dt
@@ -1132,6 +1146,7 @@ class Game:
                 self.hurt_player()
 
     def explode(self, cx, cy, radius):
+        self.score_before = self.score
         self.shake = max(self.shake, 1.0)
         play_sfx('explosion')
         self.effects.append(Effect(cx, cy, 'exp'))
@@ -1202,26 +1217,28 @@ class Game:
             # addiert wird jede Bombe mit 2+ Kills, in beliebiger Reihenfolge.
             self.double_kill_streak += 1
             self.player.bombs_left = min(MAX_BOMBS, self.player.bombs_left + 1)
-            # Bomben-Punkteanzeige am Spielerposition
-            if self.player.bombs_left == 0 and not self.player.no_damage_time > 0:
-                score_text = str(self.score - self.prev_score) if hasattr(self, 'prev_score') else str(self.score)
-                self.score_floating_texts.append({
-                    'text': score_text,
-                    'x': self.player.sx,
-                    'y': self.player.sy,
-                    'age': 0.0,
-                    'max_age': 4.0,
-                    'start_size': 10,
-                    'end_size': 30,
-                    'color': (255, 255, 0),
-                    'alpha': 200
-                })
             sx = MARGIN_L + cx * TILE + TILE // 2
             sy = MARGIN_T + cy * TILE + TILE // 2
             self.stars.append(StarEffect(sx, sy, 'Double-Kill'))
             play_sfx('doublekill')
         # Weder Double- noch Multi-Kill: die Streaks laufen weiter, sie werden
         # ausschliesslich bei Schaden zurueckgesetzt.
+        if self.double_kill_streak >= MEGA_KILL_STREAK:
+            self._mega_kill(cx, cy)
+        score_delta = self.score - self.score_before
+        if score_delta > 0:
+            self.score_floating_texts.append({
+                'text': str(score_delta),
+                'age': 0.0,
+            })
+
+    def _mega_kill(self, cx, cy):
+        sx = MARGIN_L + cx * TILE + TILE // 2
+        sy = MARGIN_T + cy * TILE + TILE // 2
+        self.stars.append(StarEffect(sx, sy, 'Mega-Kill', mega_color))
+        play_sfx('megakill')
+        self.player.invuln = MEGA_INVULN_TIME
+        self.player.mega = MEGA_INVULN_TIME
 
     def start(self):
         self.state = STATE_PLAY
@@ -1268,6 +1285,10 @@ class Game:
         # verschwunden ist (Bombe, Levelwechsel, Game Over, direkt entfernt).
         if not self.snipers and sniper_warning_playing():
             stop_sniper_warning()
+        for ft in list(self.score_floating_texts):
+            ft['age'] += dt
+            if ft['age'] >= FT_MAX_AGE:
+                self.score_floating_texts.remove(ft)
         if self.state == STATE_PLAY:
             self.shake = max(0.0, self.shake - dt * 4.0)
             if self.sniper_active:
@@ -1421,15 +1442,18 @@ def draw_player(surf, p, ox, oy, t):
     cx = ox + p.x * TILE + TILE // 2
     cy = oy + p.y * TILE + TILE // 2
     inv = p.invuln > 0
+    body, hatc = PBODY, PHAT
+    if p.mega > 0:
+        body, hatc = mega_color(t), mega_color(t)
     bob = math.sin(t * 6) * (1 if p.moving else 0)
     surf2 = pygame.Surface((TILE * 2, TILE * 2), pygame.SRCALPHA)
     pygame.draw.ellipse(surf2, (0, 0, 0, 60), (TILE - 15, TILE + 18, 30, 7))
     pygame.draw.rect(surf2, PFOOT, (TILE - 11, TILE + 7, 10, 9))
     pygame.draw.rect(surf2, PFOOT, (TILE + 1, TILE + 7, 10, 9))
-    pygame.draw.rect(surf2, PBODY, (TILE - 12, TILE - 5, 24, 15))
-    pygame.draw.circle(surf2, PBODY, (TILE, TILE - 11 + bob), 13)
-    pygame.draw.arc(surf2, PHAT, pygame.Rect(TILE - 10, TILE - 19 + bob, 20, 20), 0, 3.14, 3)
-    pygame.draw.circle(surf2, PHAT, (TILE, TILE - 16 + bob), 10)
+    pygame.draw.rect(surf2, body, (TILE - 12, TILE - 5, 24, 15))
+    pygame.draw.circle(surf2, body, (TILE, TILE - 11 + bob), 13)
+    pygame.draw.arc(surf2, hatc, pygame.Rect(TILE - 10, TILE - 19 + bob, 20, 20), 0, 3.14, 3)
+    pygame.draw.circle(surf2, hatc, (TILE, TILE - 16 + bob), 10)
     if fx > 0:
         ex, ex2 = TILE + 3, TILE + 9
     elif fx < 0:
@@ -1711,6 +1735,24 @@ def draw(surf, game, t):
     draw_state(surf, game, t)
 
 
+_FT_FONT_CACHE = {}
+
+def _floating_font(size):
+    f = _FT_FONT_CACHE.get(size)
+    if f is None:
+        f = make_font(None, size)
+        _FT_FONT_CACHE[size] = f
+    return f
+
+def _draw_score_floating_texts(frame, game):
+    for ft in game.score_floating_texts:
+        p = ft['age'] / FT_MAX_AGE
+        size = int(round(FT_START_SIZE + (FT_END_SIZE - FT_START_SIZE) * p))
+        px = MARGIN_L + game.player.sx * TILE + TILE // 2
+        py = MARGIN_T + game.player.sy * TILE + TILE // 2
+        img = _floating_font(size).render(ft['text'], True, FT_COLOR)
+        frame.blit(img, (px - img.get_width() // 2, py - img.get_height() // 2))
+
 SFX = {}
 SFX_BASE = {}
 _SNIPERWARN_CH = None
@@ -1904,6 +1946,16 @@ def _init_sfx():
         SFX['multikill'] = SFX.get('doublekill')
         SFX_BASE['multikill'] = SFX_BASE.get('doublekill', 0.45)
 
+    mg = _megakill_sound_path()
+    if mg is not None:
+        try:
+            register_sfx('megakill', pygame.mixer.Sound(mg), 0.45)
+        except Exception:
+            pass
+    if 'megakill' not in SFX:
+        SFX['megakill'] = SFX.get('multikill')
+        SFX_BASE['megakill'] = SFX_BASE.get('multikill', 0.45)
+
     sw = _sniperwarning_sound_path()
     if sw is not None:
         try:
@@ -1944,6 +1996,15 @@ def _sniperwarning_sound_path():
     for p in (
         r"G:\bomb\sniper warning.mp3",
         os.path.join(_base_dir(), 'sniperwarning.mp3'),
+    ):
+        if os.path.isfile(p):
+            return p
+    return None
+
+def _megakill_sound_path():
+    for p in (
+        r"G:\bomb\Mega Kill - Sound Effect.mp3",
+        os.path.join(_base_dir(), 'megakill.mp3'),
     ):
         if os.path.isfile(p):
             return p
@@ -2185,7 +2246,7 @@ def _joy_dir():
             if fx == 0 and hx != 0:
                 fx = int(hx)
             if fy == 0 and hy != 0:
-                fy = int(hy)
+                fy = -int(hy)
         except Exception:
             pass
         return (fx, fy)
@@ -2281,6 +2342,7 @@ def main():
             game.update(dt)
             _sync_music(game.state)
         draw(frame, game, t)
+        _draw_score_floating_texts(frame, game)
         if ui.open:
             ui.draw(frame)
         cw, ch = canvas.get_size()

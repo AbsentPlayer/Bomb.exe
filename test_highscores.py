@@ -280,6 +280,30 @@ def test_draw():
     print('all tests ok')
 
 
+
+
+def test_joy_dir_hat_matches_menu_navigation():
+    assert bomb._joy_dir() == (0, 0)
+    fake = {'axis': {0: 0.0, 1: 0.0}, 'btn': [False] * 16, 'hat': (0, 0)}
+    class J:
+        def get_axis(self, i):
+            return fake['axis'][i]
+        def get_button(self, i):
+            return fake['btn'][i]
+        def get_hat(self, i):
+            return fake['hat']
+    bomb.JOY = J()
+    fake['hat'] = (0, -1)
+    assert bomb._joy_dir() == (0, 1)
+    fake['hat'] = (0, 1)
+    assert bomb._joy_dir() == (0, -1)
+    fake['hat'] = (-1, 0)
+    assert bomb._joy_dir() == (-1, 0)
+    fake['hat'] = (1, 0)
+    assert bomb._joy_dir() == (1, 0)
+    bomb.JOY = None
+    assert bomb._joy_dir() == (0, 0)
+
 if __name__ == '__main__':
     test_load_empty()
     test_popup_and_save()
@@ -291,3 +315,4 @@ if __name__ == '__main__':
     test_rank_insertion()
     test_no_popup_below()
     test_draw()
+    test_joy_dir_hat_matches_menu_navigation()

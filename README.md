@@ -130,15 +130,17 @@ A ready-to-run build including all runtime files lives in `C:\Users\matth\Deskto
 
 ```
 bomb_test/
-    bomb.exe            – the game (onefile, icon embedded)
-    bomb.ico            – the icon used by the build
-    bomb.mp3            – background music
-    doublekill.mp3      – double-kill jingle
-    multikill.mp3       – multi-kill jingle
-    sniperwarning.mp3   – sniper warning
-    highscores.json     – local high-score board
-    assets/steuerung.png – control chart on the start screen
-    settings.json       – created on the first settings change
+    bomb.exe            - das Spiel (onefile, Icon eingebettet)
+    bomb.ico            - das Icon des Builds
+    bomb.mp3            - Hintergrundmusik
+    doublekill.mp3      - Double-Kill Jingle
+    multikill.mp3       - Multi-Kill Jingle
+    megakill.mp3        - Mega-Kill Jingle
+    sniperwarning.mp3   - Sniper-Warnung
+    highscores.json     - lokales Highscore-Board
+    .bombkey            - Salt fuer die Highscore-Signatur (mitnehmen!)
+    assets/steuerung.png - Steuerungstabelle auf dem Startbildschirm
+    settings.json       - wird bei der ersten Einstellungaenderung angelegt
 ```
 
 ## Project structure
@@ -185,20 +187,28 @@ requirements.txt   – dependencies
 [MIT](LICENSE) – see `LICENSE` file.
 
 
-## Mega-Kill und bomb score display
+## Mega-Kill, Bomben-Punkte-Anzeige und DPad
 
-- **Mega-Kill**: Bei 10 aufeinanderfolgenden Double-/Multi-Kills erscheint ein Mega-Kill.
-  - **Sound**: Es erklingt ein spezieller Mega-Kill-Sound aus der Datei G:\bomb\Mega Kill - Sound Effect.mp3 (falls vorhanden), sonst f�llt auf megakill.mp3 zur�ck.
-  - **Stern-Effekt**: Ein f�nfziger Stern mit wechselnden Farben (#FFFF00, #FF0000, #00FF00, #00FFFF) erscheint am Explosionsort und w�chst kontinuierlich, bis er den Bildschirm verl�sst.
-  - **Spieler-Immunit�t**: Nach einem Mega-Kill ist der Spieler 15 Sekunden lang unverwundbar.
-  - **Flicker-Effekt**: W�hrend der Immunit�tszeit flackert der Spieler in den Farben #FFFF00, #FF0000, #00FF00 und #00FFFF abwechselnd.
+- **Mega-Kill**: Bei 10 aufeinanderfolgenden Double-/Multi-Kills (Double-Kill-Streak >= 10,  auch wenn Double- und Multi-Kills beliebig gemischt sind) wird ein Mega-Kill ausgelöst.
+  - **Sound**: `megakill.mp3` neben dem Spiel (oder `G:\bomb\Mega Kill - Sound Effect.mp3`, falls vorhanden); ohne Datei wird auf den Multi-Kill-Sound zurückgefallen.
+  - **Stern-Effekt**: Ein fünfziger Stern mit "Mega-Kill"-Text am Explosionsort, der zwischen den Farben #FFFF00, #FF0000, #00FF00 und #00FFFF wechselt und wächst wie der normale Stern, bis er den Bildschirm verlässt.
+  - **Immunität**: Nach einem Mega-Kill ist der Spieler 15 Sekunden unverwundbar (`MEGA_INVULN_TIME = 15.0`).
+  - **Flicker**: Während der Immunitätszeit flackert der Spieler in den Farben #FFFF00, #FF0000, #00FF00 und #00FFFF.
+  - Der Immunitätsstatus endet mit Levelwechsel (`reset_level`) bzw. neuem Spiel.
 
-- **Bomben-Punkte-Anzeige am Spieler**: Nach dem Platzieren einer Bombe und deren Explosion (wenn keine Bomben mehr �brig sind) erscheint am Spielerposition ein Punkte-Text.
-  - Der Text zeigt den erhaltenen Punktebetrag an.
-  - Er erscheint in gelber Schrift (255, 255, 0) mit 50% Transparenz (Alpha 200).
-  - Er beginnt mit einer Gr��e von 10 Pixel und w�chst auf 30 Pixel, bevor er sich innerhalb von 4 Sekunden vollst�ndig ausblendet.
+- **Bomben-Punkte-Anzeige am Spieler**: Bei jeder Bomben-Explosion mit Punktezuwachs erscheint ein Punkte-Text **am Spieler** (nicht am Explosionsort):
+  - Zeigt den für diese Explosion erzielten Punktebetrag an.
+  - Gelbe Schrift (255, 255, 0), ohne Transparenz (vollständig sichtbar).
+  - Größ wächst linear von 30 auf 200 Pixel und verschwindet nach 4 Sekunden (`FT_MAX_AGE = 4.0`).
 
-- **DPad-Steuerung im Men�**: Die DPad-Steuerung im Settings-Men� ist wie folgt definiert:
-  - **DOWN** w�hlt das n�chste Men�element (vollscreen nach unten).
-  - **UP** w�hlt das vorherige Men�element (highscores nach oben).
-  - Dies wurde extra so implementiert, um die gew�nschte Laufrichtung zu gew�hrleisten.
+- **DPad-Steuerung (getrennt pro Kontext)**:
+  - **Settings-Menü (unverändert, vom Nutzer bestätigt so wie es jetzt ist)**:
+    D-Pad als Buttons 12-15 *und* als Hat akzeptiert; die Laufrichtung ist so implementiert, dass DOWN das nächste Menüelement und UP das vorherige wählt (wie vom Nutzer gewünscht).
+  - **Spielbewegung**: Die DPad-Steuerung im Spiel ist unabhängig vom Menü gemappt (die Hat y-Achse ist invertiert: `fy = -int(hy)`), damit die physische DPad-Richtung im Spiel der im Menü bestätigten Richtung entspricht. Buttons 12-15 und der Analog-Stick sind standardmäßig gemappt (12 = up, 13 = down, 14 = left, 15 = right).
+
+## Portabilität / Laufzeit
+
+- Die `bomb.exe` ist ein PyInstaller-`onefile`-Build: **pygame, numpy und Pillow sind eingebettet** - es ist keine Python-Installation und kein zusätzlicher Runtime nötig, auch nicht auf dem Ziel-PC.
+- Alle Laufzeitdateien liegen im selben Ordner wie die Exe (Pfade werden relativ zur Exe aufgelöst): `bomb.mp3`, `doublekill.mp3`, `multikill.mp3`, `megakill.mp3`, `sniperwarning.mp3`, `bomb.ico`, `assets/steuerung.png`, `.bombkey`, `highscores.json`.
+- **Highscores sind maschinengebunden** (HMAC-Signatur aus Windows-Maschinen-ID und Salt der Datei `.bombkey`): Wird der Ordner auf einem anderen PC dezippt, wird die alte Score-Liste verworfen und eine neue, gültige Datei angelegt. `.bombkey` muss mit dem Ordner mitlaufen.
+- `settings.json` wird erst bei der ersten Einstellungänderung angelegt.

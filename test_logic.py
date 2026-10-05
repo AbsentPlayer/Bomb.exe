@@ -1083,6 +1083,89 @@ def test_sniper_kill_does_not_feed_double_kill_streak():
     assert len(game.snipers) == 0
 
 
+
+def test_megakill_at_streak_ten_sets_invuln_and_star():
+    game = setup()
+    for _ in range(10):
+        for x in range(9, 12):
+            game.grid[11][x] = bomb.EMPTY
+        game.enemies = [bomb.Enemy(9, 11), bomb.Enemy(10, 11), bomb.Enemy(11, 11)]
+        game.player.sx, game.player.sy = 15, 12
+        game.player.x, game.player.y = 15.0, 12.0
+        game.player.lives = bomb.MAX_LIVES
+        game.explode(10, 11, 3)
+    assert game.player.mega == bomb.MEGA_INVULN_TIME
+    assert game.player.invuln == bomb.MEGA_INVULN_TIME
+    assert game.stars[-1].label == 'Mega-Kill'
+
+
+def test_megakill_not_at_streak_nine():
+    game = setup()
+    for _ in range(9):
+        for x in range(9, 12):
+            game.grid[11][x] = bomb.EMPTY
+        game.enemies = [bomb.Enemy(9, 11), bomb.Enemy(10, 11), bomb.Enemy(11, 11)]
+        game.player.sx, game.player.sy = 15, 12
+        game.player.x, game.player.y = 15.0, 12.0
+        game.player.lives = bomb.MAX_LIVES
+        game.explode(10, 11, 3)
+    assert game.player.mega == 0.0
+    assert game.player.invuln == 0.0
+    assert 'Mega-Kill' not in [s.label for s in game.stars]
+
+
+def test_megakill_star_color_cycles():
+    seen = set()
+    for i in range(8):
+        seen.add(bomb.mega_color(i * 0.125))
+    assert len(seen) == len(bomb.MEGA_COLORS)
+
+
+def test_megakill_star_draws():
+    game = setup()
+    game.stars.append(bomb.StarEffect(200.0, 200.0, 'Mega-Kill', bomb.mega_color))
+    surf = pygame.Surface((bomb.SCREEN_W, bomb.SCREEN_H))
+    bomb.draw(surf, game, 0.5)
+
+
+def test_score_text_on_explosion_with_gain():
+    game = setup()
+    g = game.grid
+    g[6][8] = bomb.BRICK
+    game.player.sx, game.player.sy = 15, 12
+    game.explode(6, 8, 3)
+    assert len(game.score_floating_texts) == 1
+    ft = game.score_floating_texts[0]
+    assert ft['text'] == str(game.score)
+    assert ft['age'] == 0.0
+
+
+def test_score_text_none_on_no_score_gain():
+    game = setup()
+    game.grid[10][10] = bomb.WALL
+    game.explode(10, 10, 1)
+    assert len(game.score_floating_texts) == 0
+
+
+def test_score_text_ages_out_in_update():
+    game = setup()
+    g = game.grid
+    g[6][8] = bomb.BRICK
+    game.explode(6, 8, 3)
+    assert len(game.score_floating_texts) == 1
+    for _ in range(int(bomb.FT_MAX_AGE * 60) + 1):
+        game.update(1.0 / 60.0)
+    assert len(game.score_floating_texts) == 0
+
+
+def test_score_text_draw():
+    game = setup()
+    g = game.grid
+    g[6][8] = bomb.BRICK
+    game.explode(6, 8, 3)
+    surf = pygame.Surface((bomb.SCREEN_W, bomb.SCREEN_H))
+    bomb._draw_score_floating_texts(surf, game)
+
 def main():
     tests = [
         test_grid_shape,
@@ -1149,6 +1232,14 @@ def main():
         test_double_kill_streak_resets_on_damage,
         test_double_kill_streak_survives_level_change,
         test_sniper_kill_does_not_feed_double_kill_streak,
+        test_megakill_at_streak_ten_sets_invuln_and_star,
+        test_megakill_not_at_streak_nine,
+        test_megakill_star_color_cycles,
+        test_megakill_star_draws,
+        test_score_text_on_explosion_with_gain,
+        test_score_text_none_on_no_score_gain,
+        test_score_text_ages_out_in_update,
+        test_score_text_draw,
     ]
     passed = 0
     for fn in tests:

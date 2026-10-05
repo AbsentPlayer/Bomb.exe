@@ -300,11 +300,13 @@ def test_menu_joy_hat_navigates_and_changes_volume():
     s.set_volume(120)
     ui = bomb.SettingsUI(s)
     ui.open = True
+    # Mapping as implemented for the user's controller (menu unchanged:
+    # hat y < 0 selects next row, hat y > 0 selects previous row).
     assert ui.handle_joy_event(hat_event((0, -1))) is True
     assert ui.ROWS[ui.index] == 'fullscreen'
     assert ui.handle_joy_event(hat_event((0, 0))) is False
     assert ui.handle_joy_event(hat_event((0, 1))) is True
-    assert ui.ROWS[ui.index] == 'reset_scores'
+    assert ui.ROWS[ui.index] == 'volume'
     assert ui.handle_joy_event(hat_event((0, 0))) is False
     assert ui.handle_joy_event(hat_event((1, 0))) is True
     assert s.volume == 120 + bomb.VOL_STEP
@@ -333,23 +335,29 @@ def test_menu_joy_hat_diagonal_uses_dominant_axis():
     s.fullscreen = False
     ui = bomb.SettingsUI(s)
     ui.open = True
-    assert ui.handle_joy_event(hat_event((0, 1))) is True
-    assert ui.ROWS[ui.index] == 'fullscreen'
-    assert ui.handle_joy_event(hat_event((0, 0))) is False
-    assert ui.handle_joy_event(hat_event((0.5, 1))) is True
-    assert ui.ROWS[ui.index] == 'reset_scores'
-    assert ui.handle_joy_event(hat_event((0, 0))) is False
-    assert ui.handle_joy_event(hat_event((0.5, -1))) is True
-    assert ui.ROWS[ui.index] == 'fullscreen'
+    # Mapping as implemented for the user's controller: hat y > 0 selects
+    # previous row (index - 1, wrapping), hat y < 0 selects next row.
+    # x-dominant diagonals adjust the current row's value (volume here).
+    assert ui.handle_joy_event(hat_event((1, 0.5))) is True
+    assert ui.ROWS[ui.index] == 'volume'
+    assert s.volume == bomb.VOL_DEFAULT + bomb.VOL_STEP
     assert ui.handle_joy_event(hat_event((0, 0))) is False
     assert ui.handle_joy_event(hat_event((-1, 0.5))) is True
+    assert ui.ROWS[ui.index] == 'volume'
+    assert s.volume == bomb.VOL_DEFAULT
+    assert ui.handle_joy_event(hat_event((0, 0))) is False
+    assert ui.handle_joy_event(hat_event((0, 1))) is True
+    assert ui.ROWS[ui.index] == 'reset_scores'
+    assert ui.handle_joy_event(hat_event((0, 0))) is False
+    assert ui.handle_joy_event(hat_event((0.5, 1))) is True
     assert ui.ROWS[ui.index] == 'fullscreen'
+    assert ui.handle_joy_event(hat_event((0, 0))) is False
+    assert ui.handle_joy_event(hat_event((0.5, -1))) is True
+    assert ui.ROWS[ui.index] == 'reset_scores'
     assert ui.handle_joy_event(hat_event((0, 0))) is False
     assert ui.handle_joy_event(hat_event((0, -1))) is True
     assert ui.ROWS[ui.index] == 'volume'
     assert ui.handle_joy_event(hat_event((0, 0))) is False
-    assert ui.handle_joy_event(hat_event((1, 0.5))) is True
-    assert s.volume == bomb.VOL_DEFAULT + bomb.VOL_STEP
 
 
 def test_menu_joy_hat_does_nothing_when_closed():
