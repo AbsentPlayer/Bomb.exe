@@ -241,6 +241,34 @@ flatpak remote-add --user bomb-repo repo
 flatpak install --user bomb-repo com.absentplayer.bomb
 ```
 
+### Linux release asset
+
+The `bomb.v1.1.3-linux.zip` release asset contains everything needed to run on Linux without Flatpak:
+
+```
+bomb.v1.1.3-linux.zip
+    bomb.py              - the game (Python 3.10+)
+    bomb.ico             - icon
+    bomb.mp3             - background music
+    doublekill.mp3       - double-kill jingle
+    multikill.mp3        - multi-kill jingle
+    sniperwarning.mp3    - sniper warning sound
+    requirements.txt     - Python dependencies (pygame, numpy, Pillow)
+    com.absentplayer.bomb.json       - Flatpak manifest
+    com.absentplayer.bomb.desktop    - Desktop entry
+    com.absentplayer.bomb.metainfo.xml - AppStream metainfo
+    assets/steuerung.png - control chart
+    README.md
+    LICENSE
+```
+
+Install dependencies and run:
+
+```bash
+pip install -r requirements.txt
+python bomb.py
+```
+
 ## License
 
 [MIT](LICENSE) – see `LICENSE` file.
@@ -249,7 +277,7 @@ flatpak install --user bomb-repo com.absentplayer.bomb
 
 | Version | Release asset | Changes |
 |---|---|---|
-| **v1.1.3** | `bomb.v1.1.3.zip` | **Sniper cooldown 30 s** (`SNIPER_COOLDOWN`) against sniper chains · **Bomben-Punkte-Anzeige an der Schadensstelle**: eine Anzeige je beschädigter Zelle statt einer Summe am Spieler, Position auf Brick/Power-up/Gegner/Sniper, mehrere gleichzeitig (Deckel `FT_MAX_COUNT = 40`) · Größe **15 → 100 px** (vorher 30 → 200) · nochmal **50 % mehr Transparenz** (`FT_ALPHA` 153 → 76) · **Linux Flatpak** (`com.absentplayer.bomb.json`, Desktop-Eintrag, Metainfo) |
+| **v1.1.3** | `bomb.v1.1.3.zip` (Windows) · `bomb.v1.1.3-linux.zip` (Linux) | **Sniper cooldown 30 s** (`SNIPER_COOLDOWN`) against sniper chains · **Bomben-Punkte-Anzeige an der Schadensstelle**: eine Anzeige je beschädigter Zelle statt einer Summe am Spieler, Position auf Brick/Power-up/Gegner/Sniper, mehrere gleichzeitig (Deckel `FT_MAX_COUNT = 40`) · Größe **15 → 100 px** (vorher 30 → 200) · nochmal **50 % mehr Transparenz** (`FT_ALPHA` 153 → 76) · **Linux Flatpak** (`com.absentplayer.bomb.json`, Desktop-Eintrag, Metainfo) |
 | v1.1.2 | `bomb.v1.1.2.zip` | Mega-Kill mit 10+ Kills durch eine einzige Bombe, 7 s Immunität mit Farbflackern, Bomben-Punkte-Transparenz |
 | v1.1.1 | `bomb.v1.1.zip` | DPad-Trennung Menü/Spiel, Bomben-Punkte-Anzeige 30 → 200 px |
 | v1.0.3 | `bomb_1_0_3.zip` | Mega-Kill, Bomben-Punkte-Anzeige, DPad-Korrektur, HMAC-signierte Highscores |
