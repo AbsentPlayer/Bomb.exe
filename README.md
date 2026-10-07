@@ -249,7 +249,7 @@ flatpak install --user bomb-repo com.absentplayer.bomb
 
 | Version | Release asset | Changes |
 |---|---|---|
-| **v1.1.3** | `bomb.v1.1.3.zip` | **Sniper cooldown 30 s** (`SNIPER_COOLDOWN`) against sniper chains · **Bomben-Punkte-Anzeige an der Schadensstelle**: eine Anzeige je beschädigter Zelle statt einer Summe am Spieler, Position auf Brick/Power-up/Gegner/Sniper, mehrere gleichzeitig (Deckel `FT_MAX_COUNT = 40`) · Größe **15 → 100 px** (vorher 30 → 200) · nochmal **50 % mehr Transparenz** (`FT_ALPHA` 153 → 76) |
+| **v1.1.3** | `bomb.v1.1.3.zip` | **Sniper cooldown 30 s** (`SNIPER_COOLDOWN`) against sniper chains · **Bomben-Punkte-Anzeige an der Schadensstelle**: eine Anzeige je beschädigter Zelle statt einer Summe am Spieler, Position auf Brick/Power-up/Gegner/Sniper, mehrere gleichzeitig (Deckel `FT_MAX_COUNT = 40`) · Größe **15 → 100 px** (vorher 30 → 200) · nochmal **50 % mehr Transparenz** (`FT_ALPHA` 153 → 76) · **Linux Flatpak** (`com.absentplayer.bomb.json`, Desktop-Eintrag, Metainfo) |
 | v1.1.2 | `bomb.v1.1.2.zip` | Mega-Kill mit 10+ Kills durch eine einzige Bombe, 7 s Immunität mit Farbflackern, Bomben-Punkte-Transparenz |
 | v1.1.1 | `bomb.v1.1.zip` | DPad-Trennung Menü/Spiel, Bomben-Punkte-Anzeige 30 → 200 px |
 | v1.0.3 | `bomb_1_0_3.zip` | Mega-Kill, Bomben-Punkte-Anzeige, DPad-Korrektur, HMAC-signierte Highscores |
