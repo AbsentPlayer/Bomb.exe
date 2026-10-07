@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=BOMB!
+Comment=A classic bomb-throwing arcade game
+Exec=bomb
+Icon=com.absentplayer.bomb
+Categories=Game;ArcadeGame;
+Terminal=false

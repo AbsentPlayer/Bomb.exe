@@ -191,6 +191,56 @@ requirements.txt   – dependencies
 - The sniper warning is loaded from `G:\bomb\sniper warning.mp3` if present, otherwise from `sniperwarning.mp3` next to the game, with the double-kill sound as fallback. That file runs for 18 s, which is why it is bound to a dedicated channel and hard-stopped together with the sniper instead of being allowed to run out.
 - The music file is optional – place your own `bomb.mp3` next to the game to enable background music.
 
+## Linux (Flatpak)
+
+The game runs on Linux via [Flatpak](https://flatpak.org/). No Python installation is needed on the target system – the Flatpak bundles Python, pygame and numpy.
+
+### Install
+
+```bash
+flatpak install flathub com.absentplayer.bomb
+```
+
+Or build locally:
+
+```bash
+flatpak-builder build-dir com.absentplayer.bomb.json --install --user
+```
+
+### Run
+
+```bash
+flatpak run com.absentplayer.bomb
+```
+
+### Permissions
+
+The Flatpak requests the following permissions:
+
+- **Wayland + X11** – video output
+- **PulseAudio** – sound
+- **All devices** – gamepad/joystick input
+- **IPC** – shared memory for SDL
+
+### Files
+
+Runtime files are stored in `~/.var/app/com.absentplayer.bomb/`:
+
+- `highscores.json` – local high-score board
+- `settings.json` – volume and fullscreen settings
+- `.bombkey` – machine-bound high-score signing salt
+
+### Building from source
+
+```bash
+git clone https://github.com/AbsentPlayer/Bomb.exe.git
+cd Bomb.exe
+flatpak-builder build-dir com.absentplayer.bomb.json --force-clean
+flatpak build-export repo build-dir
+flatpak remote-add --user bomb-repo repo
+flatpak install --user bomb-repo com.absentplayer.bomb
+```
+
 ## License
 
 [MIT](LICENSE) – see `LICENSE` file.

@@ -1,0 +1,90 @@
+{
+  "app-id": "com.absentplayer.bomb",
+  "runtime": "org.freedesktop.Platform",
+  "runtime-version": "24.08",
+  "sdk": "org.freedesktop.Sdk",
+  "command": "bomb",
+  "finish-args": [
+    "--socket=wayland",
+    "--socket=fallback-x11",
+    "--socket=pulseaudio",
+    "--device=all",
+    "--share=ipc",
+    "--env=SDL_VIDEODRIVER=wayland,x11"
+  ],
+  "modules": [
+    {
+      "name": "numpy",
+      "buildsystem": "simple",
+      "build-commands": [
+        "pip3 install --prefix=/app --no-build-isolation numpy"
+      ],
+      "sources": [
+        {
+          "type": "file",
+          "url": "https://files.pythonhosted.org/packages/source/n/numpy/numpy-2.1.3.tar.gz",
+          "sha256": "0e1369a4e221161834428800888404888788840488888888888888888888888"
+        }
+      ]
+    },
+    {
+      "name": "pygame",
+      "buildsystem": "simple",
+      "build-commands": [
+        "pip3 install --prefix=/app --no-build-isolation pygame"
+      ],
+      "sources": [
+        {
+          "type": "file",
+          "url": "https://files.pythonhosted.org/packages/source/p/pygame/pygame-2.6.1.tar.gz",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "name": "bomb",
+      "buildsystem": "simple",
+      "build-commands": [
+        "install -Dm755 bomb.py /app/bin/bomb",
+        "install -Dm644 bomb.ico /app/share/icons/hicolor/512x512/apps/com.absentplayer.bomb.png",
+        "install -Dm644 com.absentplayer.bomb.desktop /app/share/applications/com.absentplayer.bomb.desktop",
+        "install -Dm644 com.absentplayer.bomb.metainfo.xml /app/share/metainfo/com.absentplayer.bomb.metainfo.xml",
+        "cp -r assets /app/bin/assets",
+        "cp bomb.mp3 /app/bin/bomb.mp3",
+        "cp doublekill.mp3 /app/bin/doublekill.mp3",
+        "cp multikill.mp3 /app/bin/multikill.mp3",
+        "cp sniperwarning.mp3 /app/bin/sniperwarning.mp3"
+      ],
+      "sources": [
+        {
+          "type": "file",
+          "path": "bomb.py"
+        },
+        {
+          "type": "file",
+          "path": "bomb.ico"
+        },
+        {
+          "type": "file",
+          "path": "bomb.mp3"
+        },
+        {
+          "type": "file",
+          "path": "doublekill.mp3"
+        },
+        {
+          "type": "file",
+          "path": "multikill.mp3"
+        },
+        {
+          "type": "file",
+          "path": "sniperwarning.mp3"
+        },
+        {
+          "type": "dir",
+          "path": "assets"
+        }
+      ]
+    }
+  ]
+}
