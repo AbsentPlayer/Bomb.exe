@@ -1,5 +1,7 @@
 import json
 import os
+import subprocess
+import sys
 import tempfile
 
 os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
@@ -282,6 +284,48 @@ def test_draw():
 
 
 
+def test_persists_across_processes():
+    """Regression: der Signaturschluessel darf nicht von der Prozess-ID
+    abhaengen. Ein frischer zweiter Python-Prozess muss die vom ersten
+    geschriebene Liste weiterhin verifizieren koennen."""
+    path = os.path.join(TMP, 'cross_proc.json')
+    bomb._hs_file = lambda: path
+    if os.path.exists(path):
+        os.remove(path)
+    bomb.save_highscores([['PROC', 7777]])
+    code = (
+        "import os;"
+        "os.environ.setdefault('SDL_VIDEODRIVER','dummy');"
+        "os.environ.setdefault('SDL_AUDIODRIVER','dummy');"
+        "import bomb;"
+        "bomb._hs_file = lambda: %r;"
+        "print(repr(bomb.load_highscores()))"
+    ) % path
+    here = os.path.dirname(os.path.abspath(bomb.__file__))
+    out = subprocess.check_output([sys.executable, '-c', code], cwd=here, timeout=120)
+    assert b"['PROC', 7777]" in out
+    bomb._hs_file = lambda: os.path.join(TMP, 'highscores.json')
+
+
+def test_scores_travel_with_folder():
+    """Der Salt wandert mit dem Ordner: dieselbe Liste muss in einem
+    anderen Verzeichnis (das simulierte Entzippen auf einem anderen PC)
+    weiterhin gueltig sein - solange `.bombkey` mitkommt."""
+    import shutil
+    src = tempfile.mkdtemp()
+    dst = tempfile.mkdtemp()
+    bomb._hs_file = lambda: os.path.join(src, 'highscores.json')
+    bomb.save_highscores([['TRAVEL', 3210]])
+    for name in ('highscores.json', '.bombkey'):
+        shutil.copy(os.path.join(src, name), os.path.join(dst, name))
+    bomb._hs_file = lambda: os.path.join(dst, 'highscores.json')
+    assert bomb.load_highscores() == [['TRAVEL', 3210]]
+    # ohne Salt ist die Datei ungueltig (Schutz gegen Verlust/Fremd-Edition)
+    os.remove(os.path.join(dst, '.bombkey'))
+    assert bomb.load_highscores() == []
+    bomb._hs_file = lambda: os.path.join(TMP, 'highscores.json')
+
+
 def test_joy_dir_hat_matches_menu_navigation():
     assert bomb._joy_dir() == (0, 0)
     fake = {'axis': {0: 0.0, 1: 0.0}, 'btn': [False] * 16, 'hat': (0, 0)}
@@ -314,5 +358,8 @@ if __name__ == '__main__':
     test_default_name()
     test_rank_insertion()
     test_no_popup_below()
+    test_hs_confirm_helper()
     test_draw()
+    test_persists_across_processes()
+    test_scores_travel_with_folder()
     test_joy_dir_hat_matches_menu_navigation()

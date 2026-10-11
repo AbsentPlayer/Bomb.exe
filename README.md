@@ -33,7 +33,7 @@ Blackscreen grid of bricks, exploding bombs, patrolling enemies that hunt you vi
   - **Highscores** – deletes the entire high-score list. Because this cannot be undone it needs a confirmation: the first `Enter` only arms the row (value changes to `WIRKLICH?`), the second one really empties `highscores.json`. `Esc`, `M` or navigating to another row cancels, so a stray press never wipes the board. The in-memory list and the start screen are updated immediately, without a restart
   - Settings are stored in `settings.json` next to the game and reloaded on start. On the gamepad the menu is opened and closed with the **Menu** button, **D-pad up/down** selects the row, **D-pad left/right** changes the value (volume in steps of 5, clamped at 0/255; fullscreen toggles; the Highscores row ignores left/right), **A** activates the selected row (fullscreen toggles, the Highscores row arms and then confirms the reset, on the volume row it mutes and unmutes) and **B** closes the menu. **B** never opens the menu, so it still places bombs in the game. The direct number entry for the volume stays keyboard-only, because a gamepad cannot type digits
 - The D-pad is accepted both as raw buttons 12–15 and as a hat (`JOYHATMOTION`), because Windows drivers differ: some report the D-pad as buttons, others only as a hat. A press counts once, diagonals use the dominant axis, and in-game D-pad movement has always worked through both paths
-- **High scores** – top 10, name up to 10 characters, saved to `highscores.json`. While the name entry popup is open it takes over **all** input: keyboard events reach the name field before the settings menu, so typing `M` or `P` enters the letter instead of opening the settings or the pause menu, and you can type any name without navigating away. The popup shows an `n / 10` counter plus the line `max. 10 Characters`
+- **High scores** – top 10, name up to 10 characters, saved to `highscores.json` next to the game. The list is signed with an HMAC key derived from the salt in the `.bombkey` file, so it **persists across restarts and travels with the game folder**: zip the folder (including `.bombkey`), unzip it on another PC and your board is still there. Deleting `.bombkey` invalidates the file (it is then discarded and rebuilt empty), so a hand-edited board without the salt is rejected. While the name entry popup is open it takes over **all** input: keyboard events reach the name field before the settings menu, so typing `M` or `P` enters the letter instead of opening the settings or the pause menu, and you can type any name without navigating away. The popup shows an `n / 10` counter plus the line `max. 10 Characters`
 - **Sound** – procedural sound effects generated at runtime with `numpy` (optional); a short beep for the volume settings is generated without `numpy` so it always works; double-kill jingle from `G:\bomb\Double Kill Sound Effect.mp3` (falls back to `doublekill.mp3` next to the game, then a synthesized chime), multi-kill jingle from `G:\bomb\Multi Kill  - Sound Effect.mp3` (falls back to `multikill.mp3` next to the game, then the double-kill sound), sniper warning at 50 % volume from `G:\bomb\sniper warning.mp3` (falls back to `sniperwarning.mp3` next to the game, then the double-kill sound); background music via a `bomb.mp3` file next to the game. Music and all effects pass through the master volume from the settings
 - **Input** – full keyboard + gamepad support (stick / D-pad / hat, A = confirm, B = bomb, View = pause, Menu = settings)
 - **Visuals** – 60 FPS, particle effects, explosion flashes, screen shake, star outline flickering between yellow (#FFDE21) and magenta (#FF13F0) plus semi-transparent "Double-Kill" / "Multi-Kill" text, floating score numbers at the spot of the damage (several at once), animated HUD
@@ -95,7 +95,7 @@ python bomb.py
 
 The game opens in a 1180×810 window and can be switched to fullscreen at the desktop resolution in the settings. Music is optional: drop any `bomb.mp3` next to `bomb.py` and it will play on loop; without it the game simply runs silent.
 
-High scores are stored in `highscores.json` next to the game, settings in `settings.json`.
+High scores are stored in `highscores.json` next to the game, settings in `settings.json`. The high-score board stays persistent across restarts and is portable: because its signature is derived from the locally stored `.bombkey` salt (not from the machine or the process), the board also survives copying the whole folder to another PC as long as `.bombkey` comes along.
 
 ## Tests
 
@@ -115,7 +115,7 @@ pytest test_logic.py test_highscores.py test_settings.py
 ```
 
 `test_logic.py` covers grid generation, collisions, bomb explosions, player wall collision, BFS enemy pathfinding, power-ups and the kill rewards (2+ kills: extra bomb, 5+ kills: extra life, 3 multi-kills without damage: sniper), the sniper (streak trigger, streak surviving non-multi-kill bombs, double-kills and the sniper's own death, streak reset by damage and by a new game, streak surviving a level change, re-spawns over a run while never having two snipers at once, the 30 s cooldown blocking the chain and expiring before the next re-spawn, the warning channel being released when the sniper dies or the level resets, moves like the other enemies, horizontal/vertical shots, cover, line of sight, 5 s reload, death by bomb, crosshair effect), the score multiplier (2× while a sniper lives, 5× for the following scores after the sniper kill, the sniper's own score still paid at the previous rate, 5× winning over a new sniper, both multipliers ending on damage) and the frozen countdown (timer runs normally, stops while a sniper is alive, resumes after the sniper dies), the bomb placement cooldown (a second bomb inside the 500 ms window is rejected, a blocked click does not consume a bomb slot, the lock expires after 0.5 s, the timer clamps at 0 and a new level resets it), the stacking kill streaks (a double-kill and a multi-kill each advance `double_kill_streak`, any mix of both reaches 5, 2× at 5 and 5× at 10 with the threshold one short still unbonused, a single kill advances nothing and clears nothing, damage clears it, it survives a level change and is cleared by a new game, a sniper kill feeds neither streak), plus the free-bomb counter (10 s without damage normally, 7 s while a sniper is alive, back to 10 s after the sniper dies, not granted at all while the bomb slots are full, and reset by taking damage) and the bomb score display at the damage location (one display per scoring cell with its position on that cell instead of on the player, the sum of all displays equalling the score gain, one display per destroyed brick, the position of an enemy kill sitting on the enemy, the `FT_MAX_COUNT` cap dropping the oldest entry, the 15 → 100 px growth range and the halved `FT_ALPHA`), plus the sniper cooldown in full detail (the `SNIPER_COOLDOWN` = 30.0 constant, starting at zero, not counting down while a sniper is alive, being armed at full strength by a bomb kill and by a level change, ticking down in real time, clamping at zero, blocking the re-spawn while a full streak keeps counting, letting the next multi-kill summon the next sniper afterwards, surviving a level change, being cleared by `new_game`, standing still while paused or on the start screen, and the HUD badge drawing in both states).
-`test_highscores.py` covers the high-score file, the in-game name-entry popup, ranking and joystick input helpers. It includes the 10-character name limit (typed, after backspace and when reloaded from disk) and that the popup swallows the whole keyboard: pressing `M` and `P` while the popup is open enters `mp` into the name, leaves the state at `STATE_OVER` and does not open the settings menu, while `M` opens the menu again once the popup is closed.
+`test_highscores.py` covers the high-score file, the in-game name-entry popup, ranking and joystick input helpers. It includes the 10-character name limit (typed, after backspace and when reloaded from disk) and that the popup swallows the whole keyboard: pressing `M` and `P` while the popup is open enters `mp` into the name, leaves the state at `STATE_OVER` and does not open the settings menu, while `M` opens the menu again once the popup is closed. It also guards persistence: a score written by one process must still verify in a **fresh** second process (the signing key must not depend on the process ID - the regression that made the board reset on every launch), and a board copied to another directory together with `.bombkey` must stay valid while losing `.bombkey` invalidates it.
 `test_settings.py` covers the settings: volume clamping to 0–255, the 0–255 → 0.0–1.0 volume scale, JSON persistence, the windowed/fullscreen target sizes, the gamepad button mapping (Menu = button 7 opens the menu, View = button 6 is pause and must not open it, B = button 1 stays the bomb) and the full gamepad menu navigation (D-pad up/down wraps between the rows, D-pad left/right changes the volume in `VOL_STEP` increments and clamps at 0/255, D-pad left/right and A both toggle fullscreen, A mutes and unmutes on the volume row, B closes the menu even while a number entry is open, and B never opens the menu so it still places bombs in the game), plus the hat path (`JOYHATMOTION`) as an alternative to raw buttons 12–15 – navigation and value changes, one step per press, diagonals resolved by the dominant axis, and no reaction while the menu is closed, the high-score reset row (two confirmations before the file is emptied, cancel with `Esc`/`M`/navigation, left/right doing nothing on that row, and the same two A presses on the gamepad), and the whole BIOS menu – opening/closing with `M` or the Menu button, row navigation with wrap-around, `+`/`-` adjustment, direct number entry including clamping and cancel, and drawing every menu state without errors. It writes to a temporary directory, so your real `settings.json` is never touched.
 
 ## Building a Windows executable
@@ -130,10 +130,10 @@ The resulting `dist/bomb.exe` is self-contained (just add your `bomb.mp3` and `a
 
 The control chart `assets/steuerung.png` is **not** embedded in the executable – it is loaded from disk at runtime and scaled into the box on the start screen. You can therefore replace the chart (699 × 504 px PNG works well) at any time without rebuilding the exe.
 
-A ready-to-run build including all runtime files lives in `C:\Users\matth\Desktop\retro ki games\bomb_test`:
+A ready-to-run build including all runtime files lives in `C:\Users\matth\Desktop\retro ki games\bomb.v1.1.4-Windows`:
 
 ```
-bomb_test/
+bomb.v1.1.4-Windows/
     bomb.exe            - das Spiel (onefile, Icon eingebettet)
     bomb.ico            - das Icon des Builds
     bomb.mp3            - Hintergrundmusik
@@ -141,15 +141,15 @@ bomb_test/
     multikill.mp3       - Multi-Kill Jingle
     megakill.mp3        - Mega-Kill Jingle
     sniperwarning.mp3   - Sniper-Warnung
-    highscores.json     - lokales Highscore-Board
-    .bombkey            - Salt fuer die Highscore-Signatur (mitnehmen!)
+    highscores.json     - lokales Highscore-Board (persistent + portabel)
+    .bombkey            - Salt fuer die Highscore-Signatur (unbedingt mitnehmen!)
     assets/steuerung.png - Steuerungstabelle auf dem Startbildschirm
     settings.json       - wird bei der ersten Einstellungaenderung angelegt
     README.md           - diese Datei
     LICENSE             - Lizenz des Projekts
 ```
 
-Den Ordner einfach als ZIP kopieren und auf einem anderen Windows-PC entpacken – das Spiel laeuft dort direkt per Doppelklick. **`bomb.exe` ist alles, was gebraucht wird**: Python, pygame, numpy, Pillow, SDL2 und sogar die Visual-C++-Laufzeitbibliotheken (`VCRUNTIME140.dll`, `VCRUNTIME140_1.dll`, `msvcp140`) sind im Onefile-Container eingebettet. Es ist **keine** Python-Installation und **kein** Visual-Studio-Redistribut auf dem Ziel-PC noetig. Nur `.bombkey` muss mit dem Ordner mitlaufen, sonst wird die Highscore-Liste (maschinengebunden signiert) verworfen.
+Den Ordner einfach als ZIP kopieren und auf einem anderen Windows-PC entpacken – das Spiel laeuft dort direkt per Doppelklick. **`bomb.exe` ist alles, was gebraucht wird**: Python, pygame, numpy, Pillow, SDL2 und sogar die Visual-C++-Laufzeitbibliotheken (`VCRUNTIME140.dll`, `VCRUNTIME140_1.dll`, `msvcp140`) sind im Onefile-Container eingebettet. Es ist **keine** Python-Installation und **kein** Visual-Studio-Redistribut auf dem Ziel-PC noetig. `.bombkey` muss mit dem Ordner mitlaufen, damit die Highscore-Liste gueltig bleibt – die Signatur ist an diesen Salt gebunden (nicht an die Maschine), deshalb wandert die Liste beim Kopieren des Ordners mit und bleibt auf jedem PC persistent.
 
 ## Project structure
 
@@ -228,7 +228,7 @@ Runtime files are stored in `~/.var/app/com.absentplayer.bomb/`:
 
 - `highscores.json` – local high-score board
 - `settings.json` – volume and fullscreen settings
-- `.bombkey` – machine-bound high-score signing salt
+- `.bombkey` – high-score signing salt (portable: lets the board survive a restart; travels when the folder is copied)
 
 ### Building from source
 
@@ -243,10 +243,10 @@ flatpak install --user bomb-repo com.absentplayer.bomb
 
 ### Linux release asset
 
-The `bomb.v1.1.3-linux.zip` release asset contains everything needed to run on Linux without Flatpak:
+The next `bomb.v1.1.4-linux.zip` release asset contains everything needed to run on Linux without Flatpak:
 
 ```
-bomb.v1.1.3-linux.zip
+bomb.v1.1.4-linux.zip
     bomb.py              - the game (Python 3.10+)
     bomb.ico             - icon
     bomb.mp3             - background music
@@ -277,6 +277,7 @@ python bomb.py
 
 | Version | Release asset | Changes |
 |---|---|---|
+| **v1.1.4** | [bomb.v1.1.4.zip](https://github.com/AbsentPlayer/Bomb.exe/releases/download/v1.1.4/bomb.v1.1.4.zip) (Windows) · `bomb.v1.1.4-linux.zip` (Linux, nächster Release) | **Highscores wieder persistent + portabel**: Der Signaturschlüssel enthielt per Fehler die Windows-**Prozess-ID** (`GetCurrentProcessId`), die bei jedem Start neu war – dadurch verifizierte sich die gespeicherte `highscores.json` nie wieder und die Bestenliste startete jedes Mal leer. Fix: Der HMAC-Schlüssel wird jetzt **nur noch aus dem `.bombkey`-Salt** abgeleitet und ist weder prozess- noch maschinengebunden. Die Liste überlebt damit Neustarts und wandert beim Zippen des Ordners auf andere PCs mit (solange `.bombkey` dabei ist); eine fremd/bearbeitete Datei ohne passenden Salt wird weiterhin verworfen. Neue Regressionstests prüfen die Persistent über **Prozessgrenzen hinweg** und den Umzug des Ordners (`test_persists_across_processes`, `test_scores_travel_with_folder`) |
 | **v1.1.3** | [bomb.v1.1.3-linux.zip](https://github.com/AbsentPlayer/Bomb.exe/releases/download/v1.1.3/bomb.v1.1.3-linux.zip) (Linux) · [bomb.v1.1.3-windows.zip](https://github.com/AbsentPlayer/Bomb.exe/releases/download/beta-v1.1.3/bomb.v1.1.3-windows.zip) (Windows) | **Sniper cooldown 30 s** (`SNIPER_COOLDOWN`) against sniper chains · **Bomben-Punkte-Anzeige an der Schadensstelle**: eine Anzeige je beschädigter Zelle statt einer Summe am Spieler, Position auf Brick/Power-up/Gegner/Sniper, mehrere gleichzeitig (Deckel `FT_MAX_COUNT = 40`) · Größe **15 → 100 px** (vorher 30 → 200) · nochmal **50 % mehr Transparenz** (`FT_ALPHA` 153 → 76) · **Linux Flatpak** (`com.absentplayer.bomb.json`, Desktop-Eintrag, Metainfo) |
 
 ## Mega-Kill, Bomben-Punkte-Anzeige an der Schadensstelle, Sniper-Cooldown und DPad
@@ -316,5 +317,5 @@ python bomb.py
 
 - Die `bomb.exe` ist ein PyInstaller-`onefile`-Build: **pygame, numpy und Pillow sind eingebettet** - es ist keine Python-Installation und kein zusätzlicher Runtime nötig, auch nicht auf dem Ziel-PC. Dasselbe gilt für die Visual-C++-Laufzeit (`VCRUNTIME140.dll`, `VCRUNTIME140_1.dll`, `msvcp140`): alle drei liegen im Container, ein Redistribut muss auf dem Ziel-PC nicht installiert sein.
 - Alle Laufzeitdateien liegen im selben Ordner wie die Exe (Pfade werden relativ zur Exe aufgelöst): `bomb.mp3`, `doublekill.mp3`, `multikill.mp3`, `megakill.mp3`, `sniperwarning.mp3`, `bomb.ico`, `assets/steuerung.png`, `.bombkey`, `highscores.json`.
-- **Highscores sind maschinengebunden** (HMAC-Signatur aus Windows-Maschinen-ID und Salt der Datei `.bombkey`): Wird der Ordner auf einem anderen PC dezippt, wird die alte Score-Liste verworfen und eine neue, gültige Datei angelegt. `.bombkey` muss mit dem Ordner mitlaufen.
+- **Highscores sind persistent und portabel** (HMAC-Signatur aus dem Salt der Datei `.bombkey`, bewusst **nicht** an Prozess- oder Maschinen-ID gebunden): Die Liste wird beim Beenden gespeichert und beim nächsten Start wieder geladen – auf demselben PC genauso wie nach dem Zippen des Ordners und Entzippen auf einem anderen PC. `.bombkey` muss mit dem Ordner mitlaufen; fehlt er, ist die Datei ungültig und wird verworfen (Schutz gegen hand-geänderte Boards).
 - `settings.json` wird erst bei der ersten Einstellungänderung angelegt.

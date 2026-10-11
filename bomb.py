@@ -6,7 +6,6 @@ import sys
 import hashlib
 import hmac
 import base64
-import ctypes
 import pygame
 from collections import deque
 
@@ -2116,47 +2115,20 @@ def _hs_file():
     return os.path.join(base, 'highscores.json')
 
 
-def _machine_seed():
-    """Geraetegebundener Wert. Laeuft nicht auf einem Datentraeger, den der
-    Spieler einfach kopieren kann: die Windows MachineGuid aus der
-    Registry, ergaenzt um den Hostnamen. Ohne Registry-Zugriff (portable
-    Builds) faellt der Hostname allein zurueck."""
-    parts = []
-    try:
-        import winreg
-        try:
-            k = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
-                               r'SOFTWARE\Microsoft\Cryptography',
-                               0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
-            with k:
-                parts.append(str(winreg.QueryValueEx(k, 'MachineGuid')[0]))
-        except OSError:
-            pass
-    except Exception:
-        pass
-    try:
-        parts.append(os.environ.get('COMPUTERNAME', ''))
-    except Exception:
-        pass
-    try:
-        # Prozess-/Installationsbreite Streuung gegen triviales Kopieren
-        parts.append(str(ctypes.windll.kernel32.GetCurrentProcessId()))
-    except Exception:
-        pass
-    return '|'.join(p for p in parts if p)
-
-
 def _hs_key():
     """Schluessel fuer die Signatur der Highscore-Datei.
 
     Bewusst KEIN geheimer Wert im Quelltext: ein im Programm sichtbarer
     Schluessel laesst sich aus der EXE auslesen und damit nachbilden. Der
-    Schluessel wird deshalb zur Laufzeit aus Maschinen-ID und einem
-    pro Installationsordner zufaelligen Salt abgeleitet. Damit sind
-    nachtraegliche Edits von highscores.json auf diesem Rechner nicht mehr
-    moeglich - und weil der Salt in einer zweiten Datei steckt, deren Wert
-    sich pro Neuinstallation aendert, gilt das auch nicht fuer eine
-    weitergegebene Datei."""
+    Schluessel wird deshalb zur Laufzeit aus einem zufaellig erzeugten Salt
+    abgeleitet, der in der Datei `.bombkey` neben `highscores.json` liegt.
+
+    Der Salt wird bewusst NICHT an die Maschine bzw. den Prozess gebunden:
+    so ueberlebt die Highscore-Liste sowohl einen Neustart auf demselben PC
+    als auch das Kopieren des Spielordners auf einen anderen PC, solange
+    `.bombkey` mitwandert. Eine von Hand editierte `highscores.json` bleibt
+    ohne den passenden Salt ungueltig (Tamper-Schutz gegen versehentliches
+    oder einfaches Veraendern)."""
     salt_path = os.path.join(os.path.dirname(_hs_file()), '.bombkey')
     salt = b''
     try:
@@ -2172,7 +2144,7 @@ def _hs_key():
         except Exception:
             # Nur-Lese-Ordner: dann bleibt der Key stabil fuer die Session
             salt = b'fallback-salt'
-    return hashlib.sha256(salt + _machine_seed().encode('utf-8', 'replace')).digest()
+    return hashlib.sha256(b'bomb-highscore-v2|' + salt).digest()
 
 
 def _hs_payload(hs):
