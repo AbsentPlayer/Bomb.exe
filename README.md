@@ -130,10 +130,10 @@ The resulting `dist/bomb.exe` is self-contained (just add your `bomb.mp3` and `a
 
 The control chart `assets/steuerung.png` is **not** embedded in the executable – it is loaded from disk at runtime and scaled into the box on the start screen. You can therefore replace the chart (699 × 504 px PNG works well) at any time without rebuilding the exe.
 
-A ready-to-run build including all runtime files lives in `C:\Users\matth\Desktop\retro ki games\bomb.v1.1.4-Windows`:
+A ready-to-run build including all runtime files lives in `C:\Users\matth\Desktop\retro ki games\bomb.v1.1.4-test-Windows`:
 
 ```
-bomb.v1.1.4-Windows/
+bomb.v1.1.4-test-Windows/
     bomb.exe            - das Spiel (onefile, Icon eingebettet)
     bomb.ico            - das Icon des Builds
     bomb.mp3            - Hintergrundmusik
